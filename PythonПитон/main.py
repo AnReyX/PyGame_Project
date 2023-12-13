@@ -1,29 +1,26 @@
-import sqlite3
-import sys
-from PyQt5 import uic
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem
-
-
-class Coffee(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        uic.loadUi("main.ui", self)
-        self.con = sqlite3.connect("coffee.sqlite")
-        self.getInfo.clicked.connect(self.update_result)
-        self.setWindowTitle('Информация о кофе')
-
-    def update_result(self):
-        cur = self.con.cursor()
-        result = cur.execute('SELECT * FROM Cof_desc').fetchall()
-        self.tableWidget.setRowCount(len(result))
-        self.tableWidget.setColumnCount(len(result[0]))
-        for i, elem in enumerate(result):
-            for j, val in enumerate(elem):
-                self.tableWidget.setItem(i, j, QTableWidgetItem(str(val)))
-
+import pygame
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    ex = Coffee()
-    ex.show()
-    sys.exit(app.exec())
+    pygame.init()
+    size = width, height = 800, 400
+    screen = pygame.display.set_mode(size)
+    v = 20
+    fps = 60
+    R = 0
+    clock = pygame.time.Clock()
+    running = True
+    screen.fill('blue')
+    coords_ = (-1000, -1000)
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                screen.fill('blue')
+                R = 0
+                coords_ = event.pos
+        pygame.draw.circle(screen, (255, 255, 0), coords_, R)
+        R += v / fps
+        clock.tick(fps)
+        pygame.display.flip()
+    pygame.quit()

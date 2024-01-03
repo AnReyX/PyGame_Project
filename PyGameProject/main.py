@@ -12,7 +12,9 @@ screen = pygame.display.set_mode(size)
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
 border_sprite = pygame.sprite.Group()
+ground_border_sprite = pygame.sprite.Group()
 bullets_sprite = pygame.sprite.Group()
+all_sprites = pygame.sprite.Group()
 
 tile_len = 50
 step = 5
@@ -58,7 +60,7 @@ def load_image(name, colorkey=None):
 
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y, vec):
-        super().__init__(bullets_sprite)
+        super().__init__(bullets_sprite, all_sprites)
         self.image = pygame.Surface((10, 10), pygame.SRCALPHA)
         try:
             d = 10 / int(((x - vec[0]) ** 2 + (y - vec[1]) ** 2) ** (1 / 2) - 10)
@@ -77,7 +79,7 @@ class Bullet(pygame.sprite.Sprite):
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
-        super().__init__(player_sprite)
+        super().__init__(player_sprite, all_sprites)
         self.is_shooting = False
         self.image = player_image
         self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
@@ -101,16 +103,17 @@ class Player(pygame.sprite.Sprite):
 
 class Tile(pygame.sprite.Sprite):
     def __init__(self, tile_type, pos_x, pos_y):
-        if tile_type == 'wall':
-            super().__init__(border_sprite)
+        if tile_type in ('wall', 'box'):
+            super().__init__(border_sprite, all_sprites)
+        elif tile_type in ('water',):
+            super().__init__(ground_border_sprite, all_sprites)
         else:
-            super().__init__(tiles_sprite)
+            super().__init__(tiles_sprite, all_sprites)
         self.image = tile_images[tile_type]
         self.rect = self.image.get_rect().move(tile_len * pos_x, tile_len * pos_y)
 
     def update(self):
         if pygame.sprite.spritecollideany(self, player_sprite):
-            print(self.rect.x, self.rect.y, player.rect.x, player.rect.y)
             if self.rect.x + 45 == player.rect.x:
                 moves['l'] = 0
                 return
@@ -123,6 +126,23 @@ class Tile(pygame.sprite.Sprite):
             if self.rect.y == player.rect.y + 50:
                 moves['d'] = 0
                 return
+
+
+class Camera:
+    # зададим начальный сдвиг камеры
+    def __init__(self):
+        self.dx = 0
+        self.dy = 0
+
+    # сдвинуть объект obj на смещение камеры
+    def apply(self, obj):
+        obj.rect.x += self.dx
+        obj.rect.y += self.dy
+
+    # позиционировать камеру на объекте target
+    def update(self, target):
+        self.dx = -(target.rect.x + target.rect.w // 2 - width // 2)
+        self.dy = -(target.rect.y + target.rect.h // 2 - height // 2)
 
 
 def load_level(filename):
@@ -141,6 +161,14 @@ def generate_level(level):
                 Tile('empty', x, y)
             elif level[y][x] == '#':
                 Tile('wall', x, y)
+            elif level[y][x] == 'W':
+                Tile('water', x, y)
+            elif level[y][x] == 'S':
+                Tile('sand', x, y)
+            elif level[y][x] == 'D':
+                Tile('dirt', x, y)
+            elif level[y][x] == 'B':
+                Tile('box', x, y)
             elif level[y][x] == '@':
                 Tile('empty', x, y)
                 new_player = Player(x, y)
@@ -271,34 +299,58 @@ def draw_window():
     pygame.display.update()
 
 
+def text_display():
+    font = pygame.font.SysFont('timesNewRoman', 25)
+    s1 = font.render('Уровень 1', True, pygame.Color('white'))
+    r1 = s1.get_rect().move(10, 10)
+    s2 = font.render('Врагов: x / x', True, pygame.Color('white'))
+    r2 = s2.get_rect().move(width - s2.get_rect().width - 10, height - s2.get_rect().height - 10)
+    s3 = font.render('Патронов: y', True, pygame.Color('white'))
+    r3 = s3.get_rect().move(10, height - s3.get_rect().height - 10)
+    s4 = font.render('ОЗ: z', True, pygame.Color('white'))
+    r4 = s4.get_rect().move(width // 3 - s4.get_rect().width - 10, height - s4.get_rect().height - 8)
+    return [(s1, r1), (s2, r2), (s3, r3), (s4, r4)]
+
+
 level_map = load_level('level1.txt')
 
 tile_images = {
-    'wall': load_image('box.png'),
-    'empty': load_image('grass.png')
+    'wall': load_image('wall.png'),
+    'empty': load_image('grass.png'),
+    'water': load_image('water.png'),
+    'sand': load_image('sand.png'),
+    'dirt': load_image('dirt.png'),
+    'box': load_image('box.png')
 }
 player_image = load_image('character.png')
-player, level_x, level_y = generate_level(load_level('level1.txt'))
-
-running = True
+player, level_x, level_y = generate_level(level_map)
+camera = Camera()
+text = text_display()
 i = 0
-while running:
+while True:
     screen.fill((0, 0, 0))
+    camera.update(player)
+    #  обновляем положение всех спрайтов
+    for sprite in all_sprites:
+        camera.apply(sprite)
     border_sprite.draw(screen)
+    ground_border_sprite.draw(screen)
     tiles_sprite.draw(screen)
     bullets_sprite.draw(screen)
     player_sprite.draw(screen)
     bullets_sprite.update()
+    for line in text:
+        screen.blit(line[0], line[1])
     if i == 15:
         player.shoot()
         i = 0
     i += 1
-    x3 = player.Get_Coords()[0]
-    y3 = player.Get_Coords()[1]
-    #print(x, y)
+    #  x3 = player.Get_Coords()[0]
+    #  y3 = player.Get_Coords()[1]
+    #  print(x, y)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
+            terminate()
         if event.type == pygame.MOUSEBUTTONDOWN:
             player.is_shooting = True
             i = 15
@@ -314,9 +366,9 @@ while running:
             if event.key == pygame.K_LEFT or event.key == pygame.K_a:
                 moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
     border_sprite.update()
+    ground_border_sprite.update()
     player.move()
-    enemy(x3, y3)
-    draw_window()
+    #  enemy(x3, y3)
+    #  draw_window()
     clock.tick(fps)
     pygame.display.flip()
-terminate()

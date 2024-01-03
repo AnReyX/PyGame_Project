@@ -308,7 +308,7 @@ def text_display():
     s3 = font.render('Патронов: y', True, pygame.Color('white'))
     r3 = s3.get_rect().move(10, height - s3.get_rect().height - 10)
     s4 = font.render('ОЗ: z / z', True, pygame.Color('white'))
-    r4 = s4.get_rect().move(width // 3 - s4.get_rect().width - 10, height - s4.get_rect().height - 8)
+    r4 = s4.get_rect().move(width // 3 - s4.get_rect().width + 20, height - s4.get_rect().height - 10)
     return [(s1, r1), (s2, r2), (s3, r3), (s4, r4)]
 
 

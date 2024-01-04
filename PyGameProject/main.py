@@ -72,6 +72,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__(player_sprite, all_sprites)
         self.hp, self.ammo = 10, 30
         self.max_hp, self.pack = 10, 5
+        self.killed_enemies = 0
         self.is_reloading = False
         self.is_shooting = False
         self.safe_frames = False
@@ -185,6 +186,7 @@ class Enemy(pygame.sprite.Sprite):
 
     def update(self):
         if self.health == 0:
+            player.killed_enemies += 1
             self.kill()
         if pygame.sprite.spritecollideany(self, player_sprite):
             player.damage()
@@ -323,7 +325,7 @@ def text_display():
     ev_disp = []
     s1 = font.render('Уровень 1', True, pygame.Color('white'))
     r1 = s1.get_rect().move(10, 10)
-    s2 = font.render('Врагов: x / x', True, pygame.Color('white'))
+    s2 = font.render(f'Врагов: {player.killed_enemies} / 10', True, pygame.Color('white'))
     r2 = s2.get_rect().move(width - s2.get_rect().width - 10, height - s2.get_rect().height - 10)
     s3 = font.render(f'Патронов: {player.ammo} | {player.pack}', True, pygame.Color('white'))
     r3 = s3.get_rect().move(10, height - s3.get_rect().height - 10)
@@ -349,8 +351,10 @@ player, level_x, level_y = generate_level(level_map)
 camera = Camera()
 i = 0
 sf = 0
-enemy = Enemy(500, 300, 1)
+Enemy(200, 300, 1)
 while True:
+    if player.killed_enemies == 10:
+        terminate()
     screen.fill((0, 0, 0))
     camera.update(player)
     for sprite in all_sprites:

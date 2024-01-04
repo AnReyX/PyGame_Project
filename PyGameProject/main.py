@@ -6,6 +6,7 @@ pygame.init()
 pygame.display.set_caption('Snake Arena')
 size = width, height = 700, 550
 moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
+font = pygame.font.SysFont('timesNewRoman', 25)
 clock = pygame.time.Clock()
 fps = 60
 screen = pygame.display.set_mode(size)
@@ -13,29 +14,13 @@ screen = pygame.display.set_mode(size)
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
 border_sprite = pygame.sprite.Group()
-ground_border_sprite = pygame.sprite.Group()
+g_border_sprite = pygame.sprite.Group()
 bullets_sprite = pygame.sprite.Group()
+enemy_sprite = pygame.sprite.Group()
 all_sprites = pygame.sprite.Group()
 
 tile_len = 50
 step = 5
-
-# -------------------------------------------------------------------
-player_stand_enemy = pygame.image.load('data\enemy_stand.png')
-player_right_enemy = [pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)]
-player_left_enemy = [pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)]
-player_up_enemy = [pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)]
-player_down_enemy = [pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)]
-
-x_enemy = 540
-y_enemy = 50
-
-speed = 1
-enemy_is_near = False
-
-animation_count = 0
-
-bullets_enemy = []
 
 
 def terminate():
@@ -74,21 +59,23 @@ class Bullet(pygame.sprite.Sprite):
     def update(self):
         pygame.draw.rect(screen, pygame.Color('yellow'), (self.rect.x, self.rect.y, 10, 10))
         self.rect.x, self.rect.y = int(self.rect.x + self.speed_x), int(self.rect.y + self.speed_y)
-        if pygame.sprite.spritecollideany(self, border_sprite):
+        if pygame.sprite.spritecollideany(self, border_sprite) and not pygame.sprite.spritecollideany(self,
+                                                                                                      g_border_sprite):
             self.kill()
 
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(player_sprite, all_sprites)
+        self.hp, self.ammo = 10, 30
+        self.max_hp, self.pack = 10, 5
+        self.is_reloading = False
         self.is_shooting = False
         self.flag = False
-        self.image = player_image
+        self.image = pygame.transform.scale(load_image('character.png'), (34, 52))
         self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
                                                 (tile_len * pos_y - self.image.get_height()) // 2
                                                 )).move(tile_len * pos_x + 2, tile_len * pos_y - 3)
-        self.image = pygame.transform.scale(self.image, (34, 52))
-        self.base_image = self.image
 
     def move(self):
         if pygame.sprite.spritecollideany(self, border_sprite):
@@ -96,17 +83,17 @@ class Player(pygame.sprite.Sprite):
             sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda x: (x[4], x[5]))
             if len(sp) != 1:
                 sp += [[min(sp[0][0], sp[1][0]), max(sp[0][1], sp[1][1]), max(sp[0][2], sp[1][2]), min(sp[0][3],
-                                                                                                      sp[1][3])]]
+                                                                                                       sp[1][3])]]
                 for _ in range(2):
                     del sp[0]
             for i in sp:
-                if i[3] == self.rect.bottom - 2:
+                if i[3] >= self.rect.bottom - 2:
                     moves['d'] = 0
-                if i[1] == self.rect.left + 5:
+                if i[1] <= self.rect.left + 5:
                     moves['l'] = 0
-                if i[2] == self.rect.top + 5:
+                if i[2] <= self.rect.top + 5:
                     moves['u'] = 0
-                if i[0] == self.rect.right - 4:
+                if i[0] >= self.rect.right - 4:
                     moves['r'] = 0
             self.flag = True
         elif self.flag:
@@ -124,8 +111,14 @@ class Player(pygame.sprite.Sprite):
                                                step * (moves['d'] - moves['u']) + self.rect.y)
 
     def shoot(self):
-        if self.is_shooting:
+        if self.is_shooting and self.ammo != 0:
             Bullet(*self.rect.center, pygame.mouse.get_pos())
+            self.ammo -= 1
+
+    def reload(self):
+        if self.pack != 0:
+            self.ammo = 30
+            self.pack -= 1
 
     def Get_Coords(self):
         return [self.rect.x, self.rect.y]
@@ -136,7 +129,7 @@ class Tile(pygame.sprite.Sprite):
         if tile_type in ('wall', 'box'):
             super().__init__(border_sprite, all_sprites)
         elif tile_type in ('water',):
-            super().__init__(border_sprite, ground_border_sprite, all_sprites)
+            super().__init__(border_sprite, g_border_sprite, all_sprites)
         else:
             super().__init__(tiles_sprite, all_sprites)
         self.image = tile_images[tile_type]
@@ -158,6 +151,129 @@ class Camera:
     def update(self, target):
         self.dx = -(target.rect.x + target.rect.w // 2 - width // 2)
         self.dy = -(target.rect.y + target.rect.h // 2 - height // 2)
+
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x_enemy, y_enemy, speed):
+        super().__init__(all_sprites, enemy_sprite)
+        self.left_enemy = False
+        self.right_enemy = False
+        self.down_enemy = False
+        self.up_enemy = False
+
+        self.animation_count = 0
+
+        self.player_stand_enemy = pygame.image.load('data\enemy_stand.png')
+        self.player_right_enemy = [pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)]
+        self.player_left_enemy = [pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)]
+        self.player_up_enemy = [pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)]
+        self.player_down_enemy = [pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)]
+
+        self.speed = speed
+        self.image = self.player_stand_enemy
+        self.rect = self.image.get_rect().move(x_enemy, y_enemy)
+
+        self.enemy_is_near = False
+
+    def update(self):
+        x, y = player.rect.x, player.rect.y
+        if self.rect.x == x and self.rect.y == y:  # Если вражеский персонаж находится на оптимальных для стрельбы к.
+            self.enemy_is_near = True  # Вражеский персонаж стоит на месте
+            self.left_enemy = False
+            self.right_enemy = False
+            self.down_enemy = False
+            self.up_enemy = False
+        else:
+            if self.rect.x == x or self.rect.y == y or self.rect.x == x or self.rect.y == y:
+                # Если игрок удаляется, враг его преследует
+                self.enemy_is_near = False
+
+        if not self.enemy_is_near:  # Если вражеский персонаж не находится на оптимальных для стрельбы координатах
+            if self.rect.x != x or self.rect.y != y:
+                '''Условие, если координата x вражеского персонажа не равна координате x игрока 
+                или координата y вражеского персонажа не равна координате y игрока'''
+                if self.rect.x != x and self.rect.y != y:
+                    '''Повторяется это условие, для того, чтобы под каждое перемещение вражеского игрока 
+                    (вверх, вниз, влево, вправо) сделать анимацию'''
+                    if self.rect.x > x and self.rect.y > y:
+                        '''Условие, если координата x вражеского персонажа больше координаты x игрока 
+                    или координата y вражеского персонажа больше координаты y игрока'''
+                        self.left_enemy = True  # Отрисовываем анимацию перемещения влево
+                        self.right_enemy = False
+                        self.down_enemy = False
+                        self.up_enemy = False
+                        self.rect.x, self.rect.y = self.rect.x - self.speed, self.rect.y - self.speed
+                    elif self.rect.x < x and self.rect.y < y:
+                        self.left_enemy = False
+                        self.right_enemy = True  # Отрисовываем анимацию перемещения вправо
+                        self.down_enemy = False
+                        self.up_enemy = False
+                        self.rect.x, self.rect.y = self.rect.x + self.speed, self.rect.y + self.speed
+                    elif self.rect.x < x and self.rect.y > y:
+                        self.left_enemy = False
+                        self.right_enemy = True  # Отрисовываем анимацию перемещения вправо
+                        self.down_enemy = False
+                        self.up_enemy = False
+                        self.rect.x, self.rect.y = self.rect.x + self.speed, self.rect.y - self.speed
+                    elif self.rect.x > x and self.rect.y < y:
+                        self.left_enemy = True  # Отрисовываем анимацию перемещения влево
+                        self.right_enemy = False
+                        self.down_enemy = False
+                        self.up_enemy = False
+                        self.rect.x, self.rect.y = self.rect.x - self.speed, self.rect.y + self.speed
+                elif self.rect.y != y:
+                    if self.rect.y < y:
+                        self.left_enemy = False
+                        self.right_enemy = False
+                        self.down_enemy = True  # Отрисовываем анимацию перемещения вниз
+                        self.up_enemy = False
+                        self.rect.y = self.rect.y + self.speed
+                    elif self.rect.y > y:
+                        self.left_enemy = False
+                        self.right_enemy = False
+                        self.down_enemy = False
+                        self.up_enemy = True  # Отрисовываем анимацию перемещения вверх
+                        self.rect.y = self.rect.y - self.speed
+                elif self.rect.x != x:
+                    if self.rect.x < x:
+                        self.rect.x = self.rect.x + self.speed
+                        self.left_enemy = False
+                        self.right_enemy = True  # Отрисовываем анимацию перемещения вправо
+                        self.down_enemy = False
+                        self.up_enemy = False
+                    elif self.rect.x > x + 170:
+                        self.rect.x = self.rect.x - self.speed
+                        self.left_enemy = True  # Отрисовываем анимацию перемещения влево
+                        self.right_enemy = False
+                        self.down_enemy = False
+                        self.up_enemy = False
+            else:
+                self.left_enemy = False
+                self.right_enemy = False
+                self.down_enemy = False
+                self.up_enemy = False
+        if self.left_enemy:  # Анимация перемещения влево
+            self.image = self.player_left_enemy[self.animation_count // 4]
+            self.animation_count += 1
+            if self.animation_count == 8:
+                self.animation_count = 0
+        elif self.right_enemy:  # Анимация перемещения вправо
+            self.image = self.player_right_enemy[self.animation_count // 4]
+            self.animation_count += 1
+            if self.animation_count == 8:
+                self.animation_count = 0
+        elif self.up_enemy:  # Анимация перемещения вверх
+            self.image = self.player_up_enemy[self.animation_count // 4]
+            self.animation_count += 1
+            if self.animation_count == 8:
+                self.animation_count = 0
+        elif self.down_enemy:  # Анимация перемещения вниз
+            self.image = self.player_down_enemy[self.animation_count // 4]
+            self.animation_count += 1
+            if self.animation_count == 8:
+                self.animation_count = 0
+        else:
+            self.image = self.player_stand_enemy
 
 
 def load_level(filename):
@@ -191,140 +307,20 @@ def generate_level(level):
     return new_player, x, y
 
 
-def enemy(x1, y1):
-    # Все переменные, которые будут использоваться не только в этой функции, объявляем как глобальные
-    global left_enemy
-    global right_enemy
-    global down_enemy
-    global x_enemy
-    global y_enemy
-    x = x1
-    y = y1
-    global up_enemy
-    global enemy_is_near
-
-    if x_enemy == x and y_enemy == y:   # Если вражеский персонаж находится на оптимальных для стрельбы координатах
-        enemy_is_near = True    # Вражеский персонаж стоит на месте
-        left_enemy = False
-        right_enemy = False
-        down_enemy = False
-        up_enemy = False
-    else:
-        if x_enemy == x or y_enemy == y or x_enemy == x or y_enemy == y:
-            # Если игрок удаляется, враг его преследует
-            enemy_is_near = False
-
-    if not enemy_is_near:  # Если вражеский персонаж не находится на оптимальных для стрельбы координатах
-        if x_enemy != x or y_enemy != y:
-            '''Условие, если координата x вражеского персонажа не равна координате x игрока 
-            или координата y вражеского персонажа не равна координате y игрока'''
-            if x_enemy != x and y_enemy != y:
-                '''Повторяется это условие, для того, чтобы под каждое перемещение вражеского игрока 
-                (вверх, вниз, влево, вправо) сделать анимацию'''
-                if x_enemy > x and y_enemy > y:
-                    '''Условие, если координата x вражеского персонажа больше координаты x игрока 
-                или координата y вражеского персонажа больше координаты y игрока'''
-                    left_enemy = True     # Отрисовываем анимацию перемещения влево
-                    right_enemy = False
-                    down_enemy = False
-                    up_enemy = False
-                    x_enemy -= speed  # Перемещаем вражеского персонажа влево
-                    y_enemy -= speed  # И одновременно перемещаем его вверх
-                elif x_enemy < x and y_enemy < y:
-                    left_enemy = False
-                    right_enemy = True    # Отрисовываем анимацию перемещения вправо
-                    down_enemy = False
-                    up_enemy = False
-                    x_enemy += speed  # Перемещаем вражеского персонажа вправо
-                    y_enemy += speed  # И одновременно перемещаем его вниз
-                elif x_enemy < x and y_enemy > y:
-                    left_enemy = False
-                    right_enemy = True    # Отрисовываем анимацию перемещения вправо
-                    down_enemy = False
-                    up_enemy = False
-                    x_enemy += speed  # Перемещаем вражеского персонажа вправо
-                    y_enemy -= speed  # И одновременно перемещаем его вверх
-                elif x_enemy > x and y_enemy < y:
-                    left_enemy = True     # Отрисовываем анимацию перемещения влево
-                    right_enemy = False
-                    down_enemy = False
-                    up_enemy = False
-                    x_enemy -= speed  # Перемещаем вражеского персонажа влево
-                    y_enemy += speed  # И одновременно перемещаем его вниз
-            elif y_enemy != y:
-                if y_enemy < y:
-                    left_enemy = False
-                    right_enemy = False
-                    down_enemy = True # Отрисовываем анимацию перемещения вниз
-                    up_enemy = False
-                    y_enemy += speed  # Перемещаем вражеского персонажа вниз
-                elif y_enemy > y:
-                    left_enemy = False
-                    right_enemy = False
-                    down_enemy = False
-                    up_enemy = True   # Отрисовываем анимацию перемещения вверх
-                    y_enemy -= speed  # Перемещаем вражеского персонажа вверх
-            elif x_enemy != x+170:
-                if x_enemy < x+170:
-                    x_enemy += speed  # Перемещаем вражеского персонажа вправо
-                    left_enemy = False
-                    right_enemy = True    # Отрисовываем анимацию перемещения вправо
-                    down_enemy = False
-                    up_enemy = False
-                elif x_enemy > x+170:
-                    x_enemy -= speed  # Перемещаем вражеского персонажа влево
-                    left_enemy = True     # Отрисовываем анимацию перемещения влево
-                    right_enemy = False
-                    down_enemy = False
-                    up_enemy = False
-        else:
-            left_enemy = False
-            right_enemy = False
-            down_enemy = False
-            up_enemy = False
-
-
-window = screen
-
-
-def draw_window():
-    global animation_count
-    if left_enemy:   # Анимация перемещения влево
-        window.blit(player_left_enemy[animation_count // 4], (x_enemy, y_enemy))
-        animation_count += 1
-        if animation_count == 8:
-            animation_count = 0
-    elif right_enemy:     # Анимация перемещения вправо
-        window.blit(player_right_enemy[animation_count // 4], (x_enemy, y_enemy))
-        animation_count += 1
-        if animation_count == 8:
-            animation_count = 0
-    elif up_enemy:    # Анимация перемещения вверх
-        window.blit(player_up_enemy[animation_count // 4], (x_enemy, y_enemy))
-        animation_count += 1
-        if animation_count == 8:
-            animation_count = 0
-    elif down_enemy:  # Анимация перемещения вниз
-        window.blit(player_down_enemy[animation_count // 4], (x_enemy, y_enemy))
-        animation_count += 1
-        if animation_count == 8:
-            animation_count = 0
-    else:
-        window.blit(player_stand_enemy, (x_enemy, y_enemy))
-    pygame.display.update()
-
-
 def text_display():
-    font = pygame.font.SysFont('timesNewRoman', 25)
+    ev_disp = []
     s1 = font.render('Уровень 1', True, pygame.Color('white'))
     r1 = s1.get_rect().move(10, 10)
     s2 = font.render('Врагов: x / x', True, pygame.Color('white'))
     r2 = s2.get_rect().move(width - s2.get_rect().width - 10, height - s2.get_rect().height - 10)
-    s3 = font.render('Патронов: y', True, pygame.Color('white'))
+    s3 = font.render(f'Патронов: {player.ammo} | {player.pack}', True, pygame.Color('white'))
     r3 = s3.get_rect().move(10, height - s3.get_rect().height - 10)
-    s4 = font.render('ОЗ: z / z', True, pygame.Color('white'))
-    r4 = s4.get_rect().move(width // 3 - s4.get_rect().width + 20, height - s4.get_rect().height - 10)
-    return [(s1, r1), (s2, r2), (s3, r3), (s4, r4)]
+    s4 = font.render(f'ОЗ: {player.hp} / {player.max_hp}', True, pygame.Color('white'))
+    r4 = s4.get_rect().move(width // 2 - s4.get_rect().width, height - s4.get_rect().height - 10)
+    if player.is_reloading:
+        s5 = font.render('Перезарядка!', True, pygame.Color('white'))
+        ev_disp += [(s5, s5.get_rect().move(width - s5.get_rect().width - 10, 10))]
+    return [(s1, r1), (s2, r2), (s3, r3), (s4, r4)] + ev_disp
 
 
 level_map = load_level('level1.txt')
@@ -337,41 +333,48 @@ tile_images = {
     'dirt': load_image('dirt.png'),
     'box': load_image('box.png')
 }
-player_image = load_image('character.png')
 player, level_x, level_y = generate_level(level_map)
 camera = Camera()
-text = text_display()
 i = 0
+
+enemy = Enemy(500, 300, 1)
 while True:
     screen.fill((0, 0, 0))
     camera.update(player)
-    #  обновляем положение всех спрайтов
     for sprite in all_sprites:
         camera.apply(sprite)
     border_sprite.draw(screen)
-    ground_border_sprite.draw(screen)
+    g_border_sprite.draw(screen)
     tiles_sprite.draw(screen)
     bullets_sprite.draw(screen)
     player_sprite.draw(screen)
+    enemy_sprite.draw(screen)
+    enemy_sprite.update()
     bullets_sprite.update()
+    text = text_display()
     for line in text:
         screen.blit(line[0], line[1])
     if i == 15:
-        player.shoot()
+        if player.ammo != 0:
+            player.shoot()
+        i = 0
+    if i == 150:
+        player.reload()
+        player.is_reloading = False
         i = 0
     i += 1
-    #  x3 = player.Get_Coords()[0]
-    #  y3 = player.Get_Coords()[1]
-    #  print(x, y)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             terminate()
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             player.is_shooting = True
             i = 15
-        elif event.type == pygame.MOUSEBUTTONUP:
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             player.is_shooting = False
         if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
+            if event.key == pygame.K_r and event.type == pygame.KEYDOWN:
+                i = 20 if not player.is_reloading else 0
+                player.is_reloading = not player.is_reloading
             if event.key == pygame.K_UP or event.key == pygame.K_w:
                 moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
             if event.key == pygame.K_DOWN or event.key == pygame.K_s:
@@ -380,10 +383,6 @@ while True:
                 moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
             if event.key == pygame.K_LEFT or event.key == pygame.K_a:
                 moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
-    border_sprite.update()
-    ground_border_sprite.update()
     player.move()
-    #  enemy(x3, y3)
-    #  draw_window()
     clock.tick(fps)
     pygame.display.flip()

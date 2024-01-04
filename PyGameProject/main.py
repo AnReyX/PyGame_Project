@@ -62,6 +62,9 @@ class Bullet(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, border_sprite) and not pygame.sprite.spritecollideany(self,
                                                                                                       g_border_sprite):
             self.kill()
+        if pygame.sprite.spritecollideany(self, enemy_sprite):
+            pygame.sprite.spritecollide(self, enemy_sprite, False)[0].health -= 1
+            self.kill()
 
 
 class Player(pygame.sprite.Sprite):
@@ -71,6 +74,7 @@ class Player(pygame.sprite.Sprite):
         self.max_hp, self.pack = 10, 5
         self.is_reloading = False
         self.is_shooting = False
+        self.safe_frames = False
         self.flag = False
         self.image = pygame.transform.scale(load_image('character.png'), (34, 52))
         self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
@@ -120,8 +124,12 @@ class Player(pygame.sprite.Sprite):
             self.ammo = 30
             self.pack -= 1
 
-    def Get_Coords(self):
-        return [self.rect.x, self.rect.y]
+    def damage(self):
+        if not self.safe_frames:
+            self.hp -= 1
+            if self.hp == 0:
+                terminate()
+            self.safe_frames = True
 
 
 class Tile(pygame.sprite.Sprite):
@@ -160,7 +168,7 @@ class Enemy(pygame.sprite.Sprite):
         self.right_enemy = False
         self.down_enemy = False
         self.up_enemy = False
-
+        self.health = 10
         self.animation_count = 0
 
         self.player_stand_enemy = pygame.image.load('data\enemy_stand.png')
@@ -176,6 +184,10 @@ class Enemy(pygame.sprite.Sprite):
         self.enemy_is_near = False
 
     def update(self):
+        if self.health == 0:
+            self.kill()
+        if pygame.sprite.spritecollideany(self, player_sprite):
+            player.damage()
         x, y = player.rect.x, player.rect.y
         if self.rect.x == x and self.rect.y == y:  # Если вражеский персонаж находится на оптимальных для стрельбы к.
             self.enemy_is_near = True  # Вражеский персонаж стоит на месте
@@ -336,7 +348,7 @@ tile_images = {
 player, level_x, level_y = generate_level(level_map)
 camera = Camera()
 i = 0
-
+sf = 0
 enemy = Enemy(500, 300, 1)
 while True:
     screen.fill((0, 0, 0))
@@ -352,6 +364,11 @@ while True:
     enemy_sprite.update()
     bullets_sprite.update()
     text = text_display()
+    if player.safe_frames:
+        sf += 1
+    if sf == 100:
+        player.safe_frames = False
+        sf = 0
     for line in text:
         screen.blit(line[0], line[1])
     if i == 15:

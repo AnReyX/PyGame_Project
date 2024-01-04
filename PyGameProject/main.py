@@ -3,6 +3,7 @@ import sys
 import pygame
 
 pygame.init()
+pygame.display.set_caption('Snake Arena')
 size = width, height = 700, 550
 moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
 clock = pygame.time.Clock()
@@ -81,6 +82,7 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(player_sprite, all_sprites)
         self.is_shooting = False
+        self.flag = False
         self.image = player_image
         self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
                                                 (tile_len * pos_y - self.image.get_height()) // 2
@@ -89,9 +91,37 @@ class Player(pygame.sprite.Sprite):
         self.base_image = self.image
 
     def move(self):
-        if not pygame.sprite.spritecollideany(self, border_sprite) or 1 > 0:
-            self.rect = self.image.get_rect().move(step * (moves['r'] - moves['l']) + self.rect.x,
-                                                   step * (moves['d'] - moves['u']) + self.rect.y)
+        if pygame.sprite.spritecollideany(self, border_sprite):
+            sp = [player.rect.clip(i) for i in pygame.sprite.spritecollide(player, border_sprite, False)]
+            sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda x: (x[4], x[5]))
+            if len(sp) != 1:
+                sp += [[min(sp[0][0], sp[1][0]), max(sp[0][1], sp[1][1]), max(sp[0][2], sp[1][2]), min(sp[0][3],
+                                                                                                      sp[1][3])]]
+                for _ in range(2):
+                    del sp[0]
+            for i in sp:
+                if i[3] == self.rect.bottom - 2:
+                    moves['d'] = 0
+                if i[1] == self.rect.left + 5:
+                    moves['l'] = 0
+                if i[2] == self.rect.top + 5:
+                    moves['u'] = 0
+                if i[0] == self.rect.right - 4:
+                    moves['r'] = 0
+            self.flag = True
+        elif self.flag:
+            keys = pygame.key.get_pressed()
+            if moves['d'] == 0 and (keys[pygame.K_s] or keys[pygame.K_DOWN]):
+                moves['d'] = 1
+            if moves['u'] == 0 and (keys[pygame.K_w] or keys[pygame.K_UP]):
+                moves['u'] = 1
+            if moves['l'] == 0 and (keys[pygame.K_a] or keys[pygame.K_LEFT]):
+                moves['l'] = 1
+            if moves['r'] == 0 and (keys[pygame.K_d] or keys[pygame.K_RIGHT]):
+                moves['r'] = 1
+            self.flag = False
+        self.rect = self.image.get_rect().move(step * (moves['r'] - moves['l']) + self.rect.x,
+                                               step * (moves['d'] - moves['u']) + self.rect.y)
 
     def shoot(self):
         if self.is_shooting:
@@ -106,26 +136,11 @@ class Tile(pygame.sprite.Sprite):
         if tile_type in ('wall', 'box'):
             super().__init__(border_sprite, all_sprites)
         elif tile_type in ('water',):
-            super().__init__(ground_border_sprite, all_sprites)
+            super().__init__(border_sprite, ground_border_sprite, all_sprites)
         else:
             super().__init__(tiles_sprite, all_sprites)
         self.image = tile_images[tile_type]
         self.rect = self.image.get_rect().move(tile_len * pos_x, tile_len * pos_y)
-
-    def update(self):
-        if pygame.sprite.spritecollideany(self, player_sprite):
-            if self.rect.x + 45 == player.rect.x:
-                moves['l'] = 0
-                return
-            if self.rect.y + 45 == player.rect.y:
-                moves['u'] = 0
-                return
-            if self.rect.x == player.rect.x + 30:
-                moves['r'] = 0
-                return
-            if self.rect.y == player.rect.y + 50:
-                moves['d'] = 0
-                return
 
 
 class Camera:

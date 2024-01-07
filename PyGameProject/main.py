@@ -4,7 +4,7 @@ import pygame
 
 pygame.init()
 pygame.display.set_caption('Snake Arena')
-size = width, height = 700, 550
+size = width, height = 750, 600
 moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
 font = pygame.font.SysFont('timesNewRoman', 25)
 clock = pygame.time.Clock()
@@ -248,10 +248,10 @@ class Enemy(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, player_sprite):
             player.damage()
         x, y = player.rect.x, player.rect.y
-        if abs(self.rect.x - x) <= 250 and abs(self.rect.y - y) <= 250:
+        if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200:
             self.animation = [False, False, False, False, True]
         else:
-            if abs(self.rect.x - x) >= 250 or abs(self.rect.y - y) >= 250:
+            if abs(self.rect.x - x) >= 200 or abs(self.rect.y - y) >= 200:
                 # Если игрок удаляется, враг его преследует
                 self.animation[4] = False
         if not self.animation[4]:  # Если вражеский персонаж не находится на оптимальных для стрельбы координатах
@@ -345,22 +345,62 @@ def generate_level(level):
     return new_player, x, y
 
 
+def start_screen():
+    intro_text = ["ЗАСТАВКА", "",
+                  "Правила игры",
+                  "Если в правилах несколько строк,",
+                  "приходится выводить их построчно"]
+
+    fon = pygame.transform.scale(load_image('fon.jpg'), (width, height))
+    screen.blit(fon, (0, 0))
+    text = pygame.font.Font(None, 30)
+    text_coord = 50
+    for string in intro_text:
+        string_rendered = text.render(string, 1, pygame.Color('black'))
+        intro_rect = string_rendered.get_rect()
+        text_coord += 10
+        intro_rect.top = text_coord
+        intro_rect.x = 10
+        text_coord += intro_rect.height
+        screen.blit(string_rendered, intro_rect)
+
+    while True:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                terminate()
+            elif ev.type == pygame.KEYDOWN or ev.type == pygame.MOUSEBUTTONDOWN:
+                return  # начинаем игру
+        pygame.display.flip()
+        clock.tick(fps)
+
+
+def display_ui():
+    for i in range(10):
+        if i < player.hp:
+            screen.blit(ui_images['heart'], (454 + i * 29, 10))
+        else:
+            screen.blit(ui_images['empty_heart'], (454 + i * 29, 10))
+    screen.blit(ui_images['ammo_pack'], (width - 101, height - 77))
+    screen.blit(ui_images['bullet'], (width - 190, height - 80))
+
+
 def text_display():
     ev_disp = []
     s1 = font.render('Уровень 1', True, pygame.Color('white'))
     r1 = s1.get_rect().move(10, 10)
     s2 = font.render(f'Врагов: {player.killed_enemies} / 15', True, pygame.Color('white'))
-    r2 = s2.get_rect().move(width - s2.get_rect().width - 10, height - s2.get_rect().height - 10)
-    s3 = font.render(f'Патронов: {player.ammo} | {player.pack}', True, pygame.Color('white'))
-    r3 = s3.get_rect().move(10, height - s3.get_rect().height - 10)
-    s4 = font.render(f'ОЗ: {player.hp} / 10', True, pygame.Color('white'))
-    r4 = s4.get_rect().move(width // 2 - s4.get_rect().width, height - s4.get_rect().height - 10)
+    r2 = s2.get_rect().move(10, height - s2.get_rect().height - 10)
+    s3 = font.render(f'x{player.ammo}', True, pygame.Color('white'))
+    r3 = s3.get_rect().move(width - 240, height - 50)
+    s4 = font.render(f'x{player.pack}', True, pygame.Color('white'))
+    r4 = s4.get_rect().move(width - 135, height - 50)
     if player.is_reloading:
         s5 = font.render('Перезарядка!', True, pygame.Color('white'))
-        ev_disp += [(s5, s5.get_rect().move(width - s5.get_rect().width - 10, 10))]
+        ev_disp += [(s5, s5.get_rect().move(width - s5.get_rect().width - 10, 35))]
     return [(s1, r1), (s2, r2), (s3, r3), (s4, r4)] + ev_disp
 
 
+start_screen()
 level_map = load_level('level1.txt')
 tile_images = {
     'wall': load_image('wall.png'),
@@ -375,6 +415,12 @@ tile_images = {
     'plant_3': load_image('plant_3.png'),
     'block': load_image('block.png'),
     'spawner': load_image('spawner.png')
+}
+ui_images = {
+    'heart': load_image('heart.png'),
+    'empty_heart': load_image('empty_heart.png'),
+    'bullet': load_image('bullet.png'),
+    'ammo_pack': load_image('ammo_pack.png')
 }
 player, level_x, level_y = generate_level(level_map)
 camera = Camera()
@@ -399,6 +445,7 @@ while True:
     after_player_sprite.draw(screen)
     for line in text_display():
         screen.blit(line[0], line[1])
+    display_ui()
     if player.safe_frames:
         sf += 1
     if sf == 100:

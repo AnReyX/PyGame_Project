@@ -381,7 +381,7 @@ def display_ui():
         else:
             screen.blit(ui_images['empty_heart'], (454 + i * 29, 10))
     screen.blit(ui_images['ammo_pack'], (width - 101, height - 77))
-    screen.blit(ui_images['bullet'], (width - 190, height - 80))
+    screen.blit(ui_images['bullet'], (width - 195, height - 80))
 
 
 def text_display():

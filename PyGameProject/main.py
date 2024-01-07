@@ -1,6 +1,7 @@
 import os
 import sys
 import pygame
+import math
 
 pygame.init()
 pygame.display.set_caption('Snake Arena')
@@ -19,11 +20,13 @@ bullets_sprite = pygame.sprite.Group()
 enemy_sprite = pygame.sprite.Group()
 spawner_sprite = pygame.sprite.Group()
 after_player_sprite = pygame.sprite.Group()
+knife_sprite = pygame.sprite.Group()
 all_sprites = pygame.sprite.Group()
 
 allow_shoot = pygame.USEREVENT + 0
 allow_reload = pygame.USEREVENT + 1
 enemy_shoot = pygame.USEREVENT + 2
+allow_hit = pygame.USEREVENT + 3
 
 pygame.time.set_timer(enemy_shoot, 500)
 
@@ -90,10 +93,33 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
 
 
+class Knife(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__(knife_sprite, all_sprites)
+        self.ticks = 0
+        self.rect = player.rect
+        self.direction = (pygame.math.Vector2(x, y) - self.rect.center).angle_to((1, 0)) - 90
+        self.image = pygame.transform.rotate(knife_image, self.direction)
+        self.rect = self.image.get_rect(center=self.rect.center)
+
+    def update(self):
+        x_move = -10 * math.sin(math.radians(self.direction))
+        y_move = -10 * math.cos(math.radians(self.direction))
+        self.rect.x += (x_move if self.ticks < 10 else -x_move) - camera.dx
+        self.rect.y += (y_move if self.ticks < 10 else -y_move) - camera.dy
+        if pygame.sprite.spritecollideany(self, enemy_sprite) and self.ticks == 10:
+            for en in pygame.sprite.spritecollide(self, enemy_sprite, False):
+                en.health -= 2
+        if self.ticks == 20:
+            self.kill()
+        self.ticks += 1
+
+
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(player_sprite, all_sprites)
         self.hp, self.ammo, self.pack, self.killed_enemies = 10, 30, 5, 0
+        self.weapon, self.is_hitting = True, False
         self.is_reloading, self.is_shooting, self.safe_frames, self.flag = False, False, False, False
         self.image = pygame.transform.scale(load_image('character.png'), (34, 52))
         self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
@@ -136,6 +162,10 @@ class Player(pygame.sprite.Sprite):
         if self.is_shooting and self.ammo != 0:
             Bullet(*self.rect.center, *pygame.mouse.get_pos(), False)
             self.ammo -= 1
+
+    def hit(self):
+        if self.is_hitting:
+            Knife(*pygame.mouse.get_pos())
 
     def reload(self):
         if self.pack != 0:
@@ -221,7 +251,7 @@ class Enemy(pygame.sprite.Sprite):
 
     def update(self):
         right, left, up, down = self.speed, -self.speed, -self.speed, self.speed
-        if self.health == 0:
+        if self.health <= 0:
             player.killed_enemies += 1
             self.kill()
         if pygame.sprite.spritecollideany(self, border_sprite):
@@ -422,6 +452,7 @@ ui_images = {
     'bullet': load_image('bullet.png'),
     'ammo_pack': load_image('ammo_pack.png')
 }
+knife_image = load_image('knife.png')
 player, level_x, level_y = generate_level(level_map)
 camera = Camera()
 sf = 0
@@ -438,6 +469,8 @@ while True:
     spawner_sprite.draw(screen)
     spawner_sprite.update()
     bullets_sprite.draw(screen)
+    knife_sprite.draw(screen)
+    knife_sprite.update()
     player_sprite.draw(screen)
     enemy_sprite.draw(screen)
     enemy_sprite.update()
@@ -454,9 +487,12 @@ while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             terminate()
-        if event.type == allow_shoot:
+        if event.type == allow_shoot and player.weapon:
             pygame.time.set_timer(allow_shoot, 200)
             player.shoot()
+        if event.type == allow_hit and not player.weapon:
+            pygame.time.set_timer(allow_hit, 500)
+            player.hit()
         if event.type == enemy_shoot:
             for enemy in enemy_sprite:
                 enemy.shoot()
@@ -466,10 +502,17 @@ while True:
         if not player.is_reloading:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 player.is_shooting = True
+                player.is_hitting = True
                 pygame.time.set_timer(allow_shoot, 10)
+                pygame.time.set_timer(allow_hit, 10)
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 player.is_shooting = False
+                player.is_hitting = False
         if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
+            if event.key == pygame.K_1 and event.type == pygame.KEYDOWN:
+                player.weapon = True
+            elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
+                player.weapon = False
             if event.key == pygame.K_r and event.type == pygame.KEYDOWN:
                 pygame.time.set_timer(allow_reload, 3000)
                 player.is_reloading = not player.is_reloading

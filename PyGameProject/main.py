@@ -119,12 +119,18 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(player_sprite, all_sprites)
         self.hp, self.ammo, self.pack, self.killed_enemies = 10, 30, 5, 0
-        self.weapon, self.is_hitting = True, False
+        self.weapon, self.is_hitting, self.animation_count = 1, False, 0
         self.is_reloading, self.is_shooting, self.safe_frames, self.flag = False, False, False, False
         self.image = pygame.transform.scale(load_image('character.png'), (34, 52))
         self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
                                                 (tile_len * pos_y - self.image.get_height()) // 2
                                                 )).move(tile_len * pos_x + 2, tile_len * pos_y - 3)
+        self.player_stand = [pygame.image.load(f'data\player_{j}stand.png') for j in ('k', '')]
+        self.player_right = [[pygame.image.load(f'data\player_{j}right_{i}.png') for i in range(1, 5)]
+                             for j in ('k', '')]
+        self.player_left = [[pygame.image.load(f'data\player_{j}left_{i}.png') for i in range(1, 5)] for j in ('k', '')]
+        self.player_up = [[pygame.image.load(f'data\player_{j}up_{i}.png') for i in range(1, 5)] for j in ('k', '')]
+        self.player_down = [[pygame.image.load(f'data\player_{j}down_{i}.png') for i in range(1, 5)] for j in ('k', '')]
 
     def move(self):
         if pygame.sprite.spritecollideany(self, border_sprite):
@@ -155,8 +161,34 @@ class Player(pygame.sprite.Sprite):
                 moves['l'] = 1
             if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
                 moves['r'] = 1
-        self.rect = self.image.get_rect().move(step * (moves['r'] - moves['l']) + self.rect.x,
-                                               step * (moves['d'] - moves['u']) + self.rect.y)
+        if moves['r'] == 1:
+            self.left, self.right, self.down, self.up = False, True, False, False
+        elif moves['l'] == 1:
+            self.left, self.right, self.down, self.up = True, False, False, False
+        elif moves['d'] == 1:
+            self.left, self.right, self.down, self.up = False, False, True, False
+        elif moves['u'] == 1:
+            self.left, self.right, self.down, self.up = False, False, False, True
+        else:
+            self.left, self.right, self.down, self.up = False, False, False, False
+        if self.animation_count + 1 >= 40:
+            self.animation_count = 0
+        if self.left:  # Анимация перемещения влево
+            self.image = self.player_left[self.weapon][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
+        elif self.right:  # Анимация перемещения вправо
+            self.image = self.player_right[self.weapon][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
+        elif self.up:  # Анимация перемещения вверх
+            self.image = self.player_up[self.weapon][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
+        elif self.down:  # Анимация перемещения вниз
+            self.image = self.player_down[self.weapon][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
+        else:
+            self.image = self.player_stand[self.weapon]
+        self.rect.x += step * (moves['r'] - moves['l'])
+        self.rect.y += step * (moves['d'] - moves['u'])
 
     def shoot(self):
         if self.is_shooting and self.ammo != 0:
@@ -510,9 +542,9 @@ while True:
                 player.is_hitting = False
         if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
             if event.key == pygame.K_1 and event.type == pygame.KEYDOWN:
-                player.weapon = True
+                player.weapon = 1
             elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
-                player.weapon = False
+                player.weapon = 0
             if event.key == pygame.K_r and event.type == pygame.KEYDOWN:
                 pygame.time.set_timer(allow_reload, 3000)
                 player.is_reloading = not player.is_reloading

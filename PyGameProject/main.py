@@ -2,6 +2,7 @@ import os
 import sys
 import pygame
 import math
+import random as rd
 
 pygame.init()
 pygame.display.set_caption('Snake Arena')
@@ -125,12 +126,6 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
                                                 (tile_len * pos_y - self.image.get_height()) // 2
                                                 )).move(tile_len * pos_x + 2, tile_len * pos_y - 3)
-        self.player_stand = [pygame.image.load(f'data\player_{j}stand.png') for j in ('k', '')]
-        self.player_right = [[pygame.image.load(f'data\player_{j}right_{i}.png') for i in range(1, 5)]
-                             for j in ('k', '')]
-        self.player_left = [[pygame.image.load(f'data\player_{j}left_{i}.png') for i in range(1, 5)] for j in ('k', '')]
-        self.player_up = [[pygame.image.load(f'data\player_{j}up_{i}.png') for i in range(1, 5)] for j in ('k', '')]
-        self.player_down = [[pygame.image.load(f'data\player_{j}down_{i}.png') for i in range(1, 5)] for j in ('k', '')]
 
     def move(self):
         if pygame.sprite.spritecollideany(self, border_sprite):
@@ -162,19 +157,19 @@ class Player(pygame.sprite.Sprite):
             if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
                 moves['r'] = 1
         if moves['r'] == 1:  # Анимация перемещения вправо
-            self.image = self.player_right[self.weapon][self.animation_count // 4]
+            self.image = animated_images['player_right'][self.weapon][self.animation_count // 4]
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
         elif moves['l']:  # Анимация перемещения влево
-            self.image = self.player_left[self.weapon][self.animation_count // 4]
+            self.image = animated_images['player_left'][self.weapon][self.animation_count // 4]
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
         elif moves['d']:  # Анимация перемещения вниз
-            self.image = self.player_down[self.weapon][self.animation_count // 4]
+            self.image = animated_images['player_down'][self.weapon][self.animation_count // 4]
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
         elif moves['u']:  # Анимация перемещения вверх
-            self.image = self.player_up[self.weapon][self.animation_count // 4]
+            self.image = animated_images['player_up'][self.weapon][self.animation_count // 4]
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
         else:
-            self.image = self.player_stand[self.weapon]
+            self.image = animated_images['player_stand'][self.weapon]
         self.rect.x += step * (moves['r'] - moves['l'])
         self.rect.y += step * (moves['d'] - moves['u'])
 
@@ -243,30 +238,20 @@ class Spawner(pygame.sprite.Sprite):
         self.past_time += 1
         if self.past_time >= self.interval and spawned_enemies != 15:
             spawned_enemies += 1
-            Enemy(self.rect.x + 40, self.rect.y + 20, 1)
+            Enemy(self.rect.x + 40, self.rect.y + 20, 1, rd.randint(1, 2))
             self.past_time = 0
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x_enemy, y_enemy, speed):
+    def __init__(self, x_enemy, y_enemy, speed, e_type):
         super().__init__(all_sprites, enemy_sprite)
-        self.left_enemy = False
-        self.right_enemy = False
-        self.down_enemy = False
-        self.up_enemy = False
+        self.enemy_type = e_type
         self.animation = [False, False, False, False, False]  # left, right, down, up, enemy_is_near
+        self.anim_n = [[0, animated_images[f'{i}_enemy{e_type}'][1]] for i in ('left', 'right', 'up', 'down')]
         self.flag = False
-        self.health, self.is_hit = 3, 0
-        self.animation_count = 0
-
-        self.player_stand_enemy = pygame.image.load('data\enemy_stand.png')
-        self.player_right_enemy = [pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)]
-        self.player_left_enemy = [pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)]
-        self.player_up_enemy = [pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)]
-        self.player_down_enemy = [pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)]
-
+        self.health, self.is_hit = 3 if e_type == 1 else 5, 0
         self.speed = speed
-        self.image = self.player_stand_enemy
+        self.image = animated_images[f'stand_enemy{e_type}']
         self.rect = self.image.get_rect().move(x_enemy, y_enemy)
 
     def update(self):
@@ -298,12 +283,14 @@ class Enemy(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, player_sprite):
             player.damage()
         x, y = player.rect.x, player.rect.y
-        if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200:
+        if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200 and self.enemy_type == 1:
             self.animation = [False, False, False, False, True]
-        else:
-            if abs(self.rect.x - x) >= 200 or abs(self.rect.y - y) >= 200:
-                # Если игрок удаляется, враг его преследует
-                self.animation[4] = False
+        elif self.enemy_type == 1:
+            self.animation[4] = False
+        if self.rect.x == x and self.rect.y == y and self.enemy_type == 2:
+            self.animation = [False, False, False, False, True]
+        elif self.enemy_type == 2:
+            self.animation[4] = False
         if not self.animation[4]:  # Если вражеский персонаж не находится на оптимальных для стрельбы координатах
             if self.rect.x != x or self.rect.y != y:
                 '''Условие, если координата x вражеского персонажа не равна координате x игрока 
@@ -342,22 +329,22 @@ class Enemy(pygame.sprite.Sprite):
             else:
                 self.animation = [False, False, False, False, self.animation[4]]
         if self.animation[0]:  # Анимация перемещения влево
-            self.image = self.player_left_enemy[self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 8 else 0
+            self.image = animated_images[f'left_enemy{self.enemy_type}'][0][self.anim_n[0][0] // self.anim_n[0][1]]
+            self.anim_n[0][0] = self.anim_n[0][0] + 1 if self.anim_n[0][0] != self.anim_n[0][1] ** 2 - 1 else 0
         elif self.animation[1]:  # Анимация перемещения вправо
-            self.image = self.player_right_enemy[self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 8 else 0
+            self.image = animated_images[f'right_enemy{self.enemy_type}'][0][self.anim_n[1][0] // self.anim_n[1][1]]
+            self.anim_n[1][0] = self.anim_n[1][0] + 1 if self.anim_n[1][0] != self.anim_n[1][1] ** 2 - 1 else 0
         elif self.animation[2]:  # Анимация перемещения вниз
-            self.image = self.player_down_enemy[self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 8 else 0
+            self.image = animated_images[f'down_enemy{self.enemy_type}'][0][self.anim_n[3][0] // self.anim_n[3][1]]
+            self.anim_n[3][0] = self.anim_n[3][0] + 1 if self.anim_n[3][0] != self.anim_n[3][1] ** 2 - 1 else 0
         elif self.animation[3]:  # Анимация перемещения вверх
-            self.image = self.player_up_enemy[self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 8 else 0
+            self.image = animated_images[f'up_enemy{self.enemy_type}'][0][self.anim_n[2][0] // self.anim_n[2][1]]
+            self.anim_n[2][0] = self.anim_n[2][0] + 1 if self.anim_n[2][0] != self.anim_n[2][1] ** 2 - 1 else 0
         else:
-            self.image = self.player_stand_enemy
+            self.image = animated_images[f'stand_enemy{self.enemy_type}']
 
     def shoot(self):
-        if self.animation[4]:
+        if self.animation[4] and self.enemy_type == 1:
             Bullet(*self.rect.center, *player.rect.center)
 
 
@@ -471,6 +458,23 @@ ui_images = {
     'empty_heart': load_image('empty_heart.png'),
     'bullet': load_image('bullet.png'),
     'ammo_pack': load_image('ammo_pack.png')
+}
+animated_images = {
+        'player_stand': [pygame.image.load(f'data\player_{j}stand.png') for j in ('k', '')],
+        'player_right': [[pygame.image.load(f'data\player_{j}right_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'player_left': [[pygame.image.load(f'data\player_{j}left_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'player_up': [[pygame.image.load(f'data\player_{j}up_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'player_down': [[pygame.image.load(f'data\player_{j}down_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'stand_enemy1': pygame.image.load('data\enemy_stand.png'),
+        'right_enemy1': [[pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)], 4],
+        'left_enemy1': [[pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)], 4],
+        'up_enemy1': [[pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)], 4],
+        'down_enemy1': [[pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)], 4],
+        'stand_enemy2': pygame.image.load('data\_red_down_1.png'),
+        'right_enemy2': [[pygame.image.load(f'data\_red_right_{i}.png') for i in range(1, 4)], 3],
+        'left_enemy2': [[pygame.image.load(f'data\_red_left_{i}.png') for i in range(1, 4)], 3],
+        'up_enemy2': [[pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 3)], 2],
+        'down_enemy2': [[pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 3)], 2]
 }
 knife_image = load_image('knife.png')
 player, level_x, level_y = generate_level(level_map)

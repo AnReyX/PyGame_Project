@@ -22,6 +22,7 @@ enemy_sprite = pygame.sprite.Group()
 spawner_sprite = pygame.sprite.Group()
 after_player_sprite = pygame.sprite.Group()
 knife_sprite = pygame.sprite.Group()
+drops_sprite = pygame.sprite.Group()
 all_sprites = pygame.sprite.Group()
 
 allow_shoot = pygame.USEREVENT + 0
@@ -62,6 +63,10 @@ class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y, vec_0, vec_1, b_type=True):
         super().__init__(bullets_sprite, all_sprites)
         self.type = b_type
+        if not self.type:
+            self.rect = pygame.draw.rect(screen, (255, 255, 0), (x, y, 8, 8))
+        else:
+            self.rect = pygame.draw.rect(screen, (225, 0, 0), (x, y, 12, 12))
         self.image = pygame.Surface((12, 12) if self.type else (8, 8))
         try:
             if not self.type:
@@ -71,11 +76,6 @@ class Bullet(pygame.sprite.Sprite):
             self.speed_x, self.speed_y = int((x + vec_0 * d) // (1 + d)) - x, int((y + vec_1 * d) // (1 + d)) - y
         except ZeroDivisionError:
             self.kill()
-        self.x, self.y = vec_0 - x, vec_1 - y
-        if not self.type:
-            self.rect = pygame.draw.rect(screen, (255, 255, 0), (x, y, 8, 8))
-        else:
-            self.rect = pygame.draw.rect(screen, (225, 0, 0), (x, y, 12, 12))
 
     def update(self):
         if not self.type:
@@ -99,10 +99,10 @@ class Knife(pygame.sprite.Sprite):
         super().__init__(knife_sprite)
         self.ticks = 0
         self.rect = player.rect
-        self.direction = (pygame.math.Vector2(x, y) - self.rect.center).angle_to((1, 0)) - 90
-        self.x_move = -10 * math.sin(math.radians(self.direction))
-        self.y_move = -10 * math.cos(math.radians(self.direction))
-        self.image = pygame.transform.rotate(knife_image, self.direction)
+        direction = (pygame.math.Vector2(x, y) - self.rect.center).angle_to((1, 0)) - 90
+        self.x_move = -10 * math.sin(math.radians(direction))
+        self.y_move = -10 * math.cos(math.radians(direction))
+        self.image = pygame.transform.rotate(knife_image, direction)
         self.rect = self.image.get_rect(center=self.rect.center)
 
     def update(self):
@@ -191,6 +191,7 @@ class Player(pygame.sprite.Sprite):
         if not self.safe_frames:
             self.hp -= 1
             if self.hp == 0:
+                print('You lost :(')
                 terminate()
             self.safe_frames = True
 
@@ -207,6 +208,26 @@ class Tile(pygame.sprite.Sprite):
             super().__init__(tiles_sprite, all_sprites)
         self.image = tile_images[tile_type]
         self.rect = self.image.get_rect().move(tile_len * pos_x, tile_len * pos_y)
+
+
+class Drop(pygame.sprite.Sprite):
+    def __init__(self, x, y, drop_type):
+        super().__init__(drops_sprite, all_sprites)
+        self.drop_type = drop_type
+        if drop_type == 1:
+            self.image = box_image
+        else:
+            self.image = heart_image
+        self.rect = self.image.get_rect().move(round(x * 2, -2) // 2, round(y * 2, -2) // 2)
+
+    def update(self):
+        if pygame.sprite.spritecollideany(self, player_sprite):
+            if player.pack < 5 and self.drop_type == 1:
+                player.pack += 1
+                self.kill()
+            if player.hp != 10 and self.drop_type == 2:
+                player.hp += 1
+                self.kill()
 
 
 class Camera:
@@ -238,18 +259,26 @@ class Spawner(pygame.sprite.Sprite):
         self.past_time += 1
         if self.past_time >= self.interval and spawned_enemies != 15:
             spawned_enemies += 1
-            Enemy(self.rect.x + 40, self.rect.y + 20, 1, rd.randint(1, 2))
+            rand_enemy = rd.randint(1, 3)
+            Enemy(self.rect.x + 40, self.rect.y + 20, 2 if rand_enemy == 3 else 1, rand_enemy)
             self.past_time = 0
 
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x_enemy, y_enemy, speed, e_type):
         super().__init__(all_sprites, enemy_sprite)
-        self.enemy_type = e_type
+        self.e_type = e_type
         self.animation = [False, False, False, False, False]  # left, right, down, up, enemy_is_near
         self.anim_n = [[0, animated_images[f'{i}_enemy{e_type}'][1]] for i in ('left', 'right', 'up', 'down')]
         self.flag = False
-        self.health, self.is_hit = 3 if e_type == 1 else 5, 0
+        if e_type == 1:
+            self.health = 7
+        elif e_type == 2:
+            self.health = 10
+        else:
+            self.health = 5
+        self.hp = self.health
+        self.is_hit = 0
         self.speed = speed
         self.image = animated_images[f'stand_enemy{e_type}']
         self.rect = self.image.get_rect().move(x_enemy, y_enemy)
@@ -258,7 +287,17 @@ class Enemy(pygame.sprite.Sprite):
         right, left, up, down = self.speed, -self.speed, -self.speed, self.speed
         if self.health <= 0:
             player.killed_enemies += 1
+            if player.pack < 5 or player.hp != 10:
+                chance = rd.random()
+                if 0 <= chance <= 0.2:
+                    Drop(*self.rect.center, 1)
+                elif 0.8 <= chance <= 1:
+                    Drop(*self.rect.center, 2)
             self.kill()
+        elif self.health < self.hp:
+            pygame.draw.rect(screen, (0, 0, 0), (self.rect.x - 10, self.rect.y - 15, self.rect.width + 20, 10))
+            pygame.draw.rect(screen, (255, 0, 0), (self.rect.x - 10, self.rect.y - 15,
+                                                   int((self.rect.width + 20) * (self.health / self.hp)), 10))
         if pygame.sprite.spritecollideany(self, border_sprite):
             sp = [self.rect.clip(i) for i in pygame.sprite.spritecollide(self, border_sprite, False)]
             sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda x: (x[4], x[5]))
@@ -283,19 +322,20 @@ class Enemy(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, player_sprite):
             player.damage()
         x, y = player.rect.x, player.rect.y
-        if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200 and self.enemy_type == 1:
+        if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200 and self.e_type == 1:
             self.animation = [False, False, False, False, True]
-        elif self.enemy_type == 1:
+        elif self.e_type == 1:
             self.animation[4] = False
-        if self.rect.x == x and self.rect.y == y and self.enemy_type == 2:
+        if self.rect.x == x and self.rect.y == y and self.e_type in (2, 3):
             self.animation = [False, False, False, False, True]
-        elif self.enemy_type == 2:
+        elif self.e_type in (2, 3):
             self.animation[4] = False
-        if not self.animation[4]:  # Если вражеский персонаж не находится на оптимальных для стрельбы координатах
+        if not self.animation[4]:
+            # Если вражеский персонаж не находится на оптимальных для стрельбы координатах
             if self.rect.x != x or self.rect.y != y:
                 '''Условие, если координата x вражеского персонажа не равна координате x игрока 
                 или координата y вражеского персонажа не равна координате y игрока'''
-                if self.rect.x != x and self.rect.y != y:
+                if self.rect.x != x and self.rect.y != y and (abs(self.rect.x - x) > 1 if self.e_type == 3 else True):
                     '''Повторяется это условие, для того, чтобы под каждое перемещение вражеского игрока 
                     (вверх, вниз, влево, вправо) сделать анимацию'''
                     if self.rect.x > x and self.rect.y > y:
@@ -309,7 +349,7 @@ class Enemy(pygame.sprite.Sprite):
                     elif self.rect.x < x and self.rect.y > y:
                         self.animation = [False, True, False, False, self.animation[4]]
                         self.rect.x, self.rect.y = self.rect.x + right, self.rect.y + up
-                    elif self.rect.x > x and self.rect.y < y:
+                    elif self.rect.x > x and self.rect.y < y and (self.rect.x - x > 1 if self.e_type == 3 else True):
                         self.animation = [True, False, False, False, self.animation[4]]
                         self.rect.x, self.rect.y = self.rect.x + left, self.rect.y + down
                 elif self.rect.y != y:
@@ -329,22 +369,22 @@ class Enemy(pygame.sprite.Sprite):
             else:
                 self.animation = [False, False, False, False, self.animation[4]]
         if self.animation[0]:  # Анимация перемещения влево
-            self.image = animated_images[f'left_enemy{self.enemy_type}'][0][self.anim_n[0][0] // self.anim_n[0][1]]
+            self.image = animated_images[f'left_enemy{self.e_type}'][0][self.anim_n[0][0] // self.anim_n[0][1]]
             self.anim_n[0][0] = self.anim_n[0][0] + 1 if self.anim_n[0][0] != self.anim_n[0][1] ** 2 - 1 else 0
         elif self.animation[1]:  # Анимация перемещения вправо
-            self.image = animated_images[f'right_enemy{self.enemy_type}'][0][self.anim_n[1][0] // self.anim_n[1][1]]
+            self.image = animated_images[f'right_enemy{self.e_type}'][0][self.anim_n[1][0] // self.anim_n[1][1]]
             self.anim_n[1][0] = self.anim_n[1][0] + 1 if self.anim_n[1][0] != self.anim_n[1][1] ** 2 - 1 else 0
-        elif self.animation[2]:  # Анимация перемещения вниз
-            self.image = animated_images[f'down_enemy{self.enemy_type}'][0][self.anim_n[3][0] // self.anim_n[3][1]]
+        elif self.animation[2]:  # Анимация перемещения
+            self.image = animated_images[f'down_enemy{self.e_type}'][0][self.anim_n[3][0] // self.anim_n[3][1]]
             self.anim_n[3][0] = self.anim_n[3][0] + 1 if self.anim_n[3][0] != self.anim_n[3][1] ** 2 - 1 else 0
         elif self.animation[3]:  # Анимация перемещения вверх
-            self.image = animated_images[f'up_enemy{self.enemy_type}'][0][self.anim_n[2][0] // self.anim_n[2][1]]
+            self.image = animated_images[f'up_enemy{self.e_type}'][0][self.anim_n[2][0] // self.anim_n[2][1]]
             self.anim_n[2][0] = self.anim_n[2][0] + 1 if self.anim_n[2][0] != self.anim_n[2][1] ** 2 - 1 else 0
         else:
-            self.image = animated_images[f'stand_enemy{self.enemy_type}']
+            self.image = animated_images[f'stand_enemy{self.e_type}']
 
     def shoot(self):
-        if self.animation[4] and self.enemy_type == 1:
+        if self.animation[4] and self.e_type == 1:
             Bullet(*self.rect.center, *player.rect.center)
 
 
@@ -474,14 +514,22 @@ animated_images = {
         'right_enemy2': [[pygame.image.load(f'data\_red_right_{i}.png') for i in range(1, 4)], 3],
         'left_enemy2': [[pygame.image.load(f'data\_red_left_{i}.png') for i in range(1, 4)], 3],
         'up_enemy2': [[pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 5)], 4],
-        'down_enemy2': [[pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 5)], 4]
+        'down_enemy2': [[pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 5)], 4],
+        'stand_enemy3': pygame.image.load('data\_yellow_down_1.png'),
+        'right_enemy3': [[pygame.image.load(f'data\_yellow_right_{i}.png') for i in range(1, 4)], 3],
+        'left_enemy3': [[pygame.image.load(f'data\_yellow_left_{i}.png') for i in range(1, 4)], 3],
+        'up_enemy3': [[pygame.image.load(f'data\_yellow_up_{i}.png') for i in range(1, 5)], 4],
+        'down_enemy3': [[pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)], 4]
 }
 knife_image = load_image('knife.png')
+box_image = load_image('ammo_drop.PNG')
+heart_image = load_image('heart.png')
 player, level_x, level_y = generate_level(level_map)
 camera = Camera()
 sf = 0
 while True:
     if player.killed_enemies == 15:
+        print('You won! :3')
         terminate()
     screen.fill((0, 0, 0))
     camera.update(player)
@@ -492,6 +540,8 @@ while True:
     tiles_sprite.draw(screen)
     spawner_sprite.draw(screen)
     spawner_sprite.update()
+    drops_sprite.draw(screen)
+    drops_sprite.update()
     bullets_sprite.draw(screen)
     knife_sprite.draw(screen)
     knife_sprite.update()
@@ -511,9 +561,10 @@ while True:
         sf = 0
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
+            print('You quited')
             terminate()
         if event.type == allow_shoot and player.weapon:
-            pygame.time.set_timer(allow_shoot, 200)
+            pygame.time.set_timer(allow_shoot, 150)
             player.shoot()
         if event.type == allow_hit and not player.weapon:
             pygame.time.set_timer(allow_hit, 500)

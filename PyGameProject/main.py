@@ -72,13 +72,13 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
         self.x, self.y = vec_0 - x, vec_1 - y
         if not self.type:
-            self.rect = pygame.draw.rect(screen, pygame.Color('yellow'), (x, y, 8, 8))
+            self.rect = pygame.draw.rect(screen, (255, 255, 0), (x, y, 8, 8))
         else:
             self.rect = pygame.draw.rect(screen, (225, 0, 0), (x, y, 12, 12))
 
     def update(self):
         if not self.type:
-            pygame.draw.rect(screen, pygame.Color('yellow'), (self.rect.x, self.rect.y, 8, 8))
+            pygame.draw.rect(screen, (255, 255, 0), (self.rect.x, self.rect.y, 8, 8))
         else:
             pygame.draw.rect(screen, (225, 0, 0), (self.rect.x, self.rect.y, 12, 12))
         self.rect.x, self.rect.y = int(self.rect.x + self.speed_x), int(self.rect.y + self.speed_y)
@@ -95,21 +95,21 @@ class Bullet(pygame.sprite.Sprite):
 
 class Knife(pygame.sprite.Sprite):
     def __init__(self, x, y):
-        super().__init__(knife_sprite, all_sprites)
+        super().__init__(knife_sprite)
         self.ticks = 0
         self.rect = player.rect
         self.direction = (pygame.math.Vector2(x, y) - self.rect.center).angle_to((1, 0)) - 90
+        self.x_move = -10 * math.sin(math.radians(self.direction))
+        self.y_move = -10 * math.cos(math.radians(self.direction))
         self.image = pygame.transform.rotate(knife_image, self.direction)
         self.rect = self.image.get_rect(center=self.rect.center)
 
     def update(self):
-        x_move = -10 * math.sin(math.radians(self.direction))
-        y_move = -10 * math.cos(math.radians(self.direction))
-        self.rect.x += (x_move if self.ticks < 10 else -x_move) - camera.dx
-        self.rect.y += (y_move if self.ticks < 10 else -y_move) - camera.dy
+        self.rect.x += (self.x_move if self.ticks < 10 else -self.x_move)
+        self.rect.y += (self.y_move if self.ticks < 10 else -self.y_move)
         if pygame.sprite.spritecollideany(self, enemy_sprite) and self.ticks == 10:
             for en in pygame.sprite.spritecollide(self, enemy_sprite, False):
-                en.health -= 2
+                en.health -= 1
         if self.ticks == 20:
             self.kill()
         self.ticks += 1
@@ -161,29 +161,17 @@ class Player(pygame.sprite.Sprite):
                 moves['l'] = 1
             if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
                 moves['r'] = 1
-        if moves['r'] == 1:
-            self.left, self.right, self.down, self.up = False, True, False, False
-        elif moves['l'] == 1:
-            self.left, self.right, self.down, self.up = True, False, False, False
-        elif moves['d'] == 1:
-            self.left, self.right, self.down, self.up = False, False, True, False
-        elif moves['u'] == 1:
-            self.left, self.right, self.down, self.up = False, False, False, True
-        else:
-            self.left, self.right, self.down, self.up = False, False, False, False
-        if self.animation_count + 1 >= 40:
-            self.animation_count = 0
-        if self.left:  # Анимация перемещения влево
-            self.image = self.player_left[self.weapon][self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
-        elif self.right:  # Анимация перемещения вправо
+        if moves['r'] == 1:  # Анимация перемещения вправо
             self.image = self.player_right[self.weapon][self.animation_count // 4]
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
-        elif self.up:  # Анимация перемещения вверх
-            self.image = self.player_up[self.weapon][self.animation_count // 4]
+        elif moves['l']:  # Анимация перемещения влево
+            self.image = self.player_left[self.weapon][self.animation_count // 4]
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
-        elif self.down:  # Анимация перемещения вниз
+        elif moves['d']:  # Анимация перемещения вниз
             self.image = self.player_down[self.weapon][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
+        elif moves['u']:  # Анимация перемещения вверх
+            self.image = self.player_up[self.weapon][self.animation_count // 4]
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
         else:
             self.image = self.player_stand[self.weapon]
@@ -268,7 +256,7 @@ class Enemy(pygame.sprite.Sprite):
         self.up_enemy = False
         self.animation = [False, False, False, False, False]  # left, right, down, up, enemy_is_near
         self.flag = False
-        self.health = 3
+        self.health, self.is_hit = 3, 0
         self.animation_count = 0
 
         self.player_stand_enemy = pygame.image.load('data\enemy_stand.png')
@@ -503,7 +491,8 @@ while True:
     bullets_sprite.draw(screen)
     knife_sprite.draw(screen)
     knife_sprite.update()
-    player_sprite.draw(screen)
+    if (sf // 10) % 2 == 0:
+        player_sprite.draw(screen)
     enemy_sprite.draw(screen)
     enemy_sprite.update()
     bullets_sprite.update()
@@ -545,7 +534,7 @@ while True:
                 player.weapon = 1
             elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
                 player.weapon = 0
-            if event.key == pygame.K_r and event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
                 pygame.time.set_timer(allow_reload, 3000)
                 player.is_reloading = not player.is_reloading
             if event.key == pygame.K_UP or event.key == pygame.K_w:

@@ -323,7 +323,7 @@ class Enemy(pygame.sprite.Sprite):
                     if self.rect.x < x:
                         self.rect.x = self.rect.x + right
                         self.animation = [False, True, False, False, self.animation[4]]
-                    elif self.rect.x > x + 170:
+                    elif self.rect.x > x:
                         self.rect.x = self.rect.x + left
                         self.animation = [True, False, False, False, self.animation[4]]
             else:
@@ -473,8 +473,8 @@ animated_images = {
         'stand_enemy2': pygame.image.load('data\_red_down_1.png'),
         'right_enemy2': [[pygame.image.load(f'data\_red_right_{i}.png') for i in range(1, 4)], 3],
         'left_enemy2': [[pygame.image.load(f'data\_red_left_{i}.png') for i in range(1, 4)], 3],
-        'up_enemy2': [[pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 3)], 2],
-        'down_enemy2': [[pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 3)], 2]
+        'up_enemy2': [[pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 5)], 4],
+        'down_enemy2': [[pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 5)], 4]
 }
 knife_image = load_image('knife.png')
 player, level_x, level_y = generate_level(level_map)

@@ -298,7 +298,7 @@ class Enemy(pygame.sprite.Sprite):
                                                    int((self.rect.width + 20) * (self.health / self.hp)), 10))
         if pygame.sprite.spritecollideany(self, border_sprite):
             sp = [self.rect.clip(i) for i in pygame.sprite.spritecollide(self, border_sprite, False)]
-            sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda x: (x[4], x[5]))
+            sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda a: (a[4], a[5]))
             if len(sp) != 1:
                 sp += [[min(sp[0][0], sp[1][0]), max(sp[0][1], sp[1][1]), max(sp[0][2], sp[1][2]), min(sp[0][3],
                                                                                                        sp[1][3])]]
@@ -387,7 +387,7 @@ class Enemy(pygame.sprite.Sprite):
 
 
 def load_level(filename):
-    level = [line.strip() for line in open("data/" + filename, 'r')]
+    level = [string.strip() for string in open("data/" + filename, 'r')]
     max_width = max(map(len, level))
     return list(map(lambda x: x.ljust(max_width, '.'), level))
 

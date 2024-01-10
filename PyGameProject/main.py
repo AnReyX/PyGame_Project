@@ -68,21 +68,16 @@ class Bullet(pygame.sprite.Sprite):
         else:
             self.rect = pygame.draw.rect(screen, (225, 0, 0), (x, y, 12, 12))
         self.image = pygame.Surface((12, 12) if self.type else (8, 8))
-        try:
-            if not self.type:
-                d = 10 / int(((x - vec_0) ** 2 + (y - vec_1) ** 2) ** (1 / 2) - 10)
-            else:
-                d = 5 / int(((x - vec_0) ** 2 + (y - vec_1) ** 2) ** (1 / 2) - 5)
-            self.speed_x, self.speed_y = int((x + vec_0 * d) // (1 + d)) - x, int((y + vec_1 * d) // (1 + d)) - y
-        except ZeroDivisionError:
-            self.kill()
+        self.mov_vect = pygame.math.Vector2(vec_0 - x, vec_1 - y)
+        self.speed = 12 if not self.type else 7
+        self.mov_vect.scale_to_length(self.speed)
 
     def update(self):
         if not self.type:
             pygame.draw.rect(screen, (255, 255, 0), (self.rect.x, self.rect.y, 8, 8))
         else:
             pygame.draw.rect(screen, (225, 0, 0), (self.rect.x, self.rect.y, 12, 12))
-        self.rect.x, self.rect.y = int(self.rect.x + self.speed_x), int(self.rect.y + self.speed_y)
+        self.rect.x, self.rect.y = int(self.rect.x + self.mov_vect.x), int(self.rect.y + self.mov_vect.y)
         if pygame.sprite.spritecollideany(self, border_sprite) and not pygame.sprite.spritecollideany(self,
                                                                                                       g_border_sprite):
             self.kill()
@@ -260,7 +255,11 @@ class Spawner(pygame.sprite.Sprite):
         if self.past_time >= self.interval and spawned_enemies != 15:
             spawned_enemies += 1
             rand_enemy = rd.randint(1, 3)
-            Enemy(self.rect.x + 40, self.rect.y + 20, 2 if rand_enemy == 3 else 1, rand_enemy)
+            if rand_enemy == 1:
+                speed = 2
+            else:
+                speed = 1 if rand_enemy == 2 else 5
+            Enemy(self.rect.x + 40, self.rect.y + 20, speed, rand_enemy)
             self.past_time = 0
 
 
@@ -276,7 +275,7 @@ class Enemy(pygame.sprite.Sprite):
         elif e_type == 2:
             self.health = 10
         else:
-            self.health = 5
+            self.health = 3
         self.hp = self.health
         self.is_hit = 0
         self.speed = speed
@@ -320,10 +319,16 @@ class Enemy(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, player_sprite):
             player.damage()
         x, y = player.rect.x, player.rect.y
-        if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200 and self.e_type == 1:
-            self.animation = [False, False, False, False, True]
-        elif self.e_type == 1:
-            self.animation[4] = False
+        if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200 and self.e_type != 2:
+            if self.e_type == 1:
+                self.animation = [False, False, False, False, True]
+            else:
+                self.speed = 5
+        elif self.e_type != 2:
+            if self.e_type == 1:
+                self.animation[4] = False
+            else:
+                self.speed = 3
         if self.rect.x == x and self.rect.y == y and self.e_type in (2, 3):
             self.animation = [False, False, False, False, True]
         elif self.e_type in (2, 3):
@@ -336,20 +341,29 @@ class Enemy(pygame.sprite.Sprite):
                 if self.rect.x != x and self.rect.y != y and (abs(self.rect.x - x) > 1 if self.e_type == 3 else True):
                     '''Повторяется это условие, для того, чтобы под каждое перемещение вражеского игрока 
                     (вверх, вниз, влево, вправо) сделать анимацию'''
-                    if self.rect.x > x and self.rect.y > y:
+                    if self.rect.x > x and self.rect.y > y and (left or up):
                         '''Условие, если координата x вражеского персонажа больше координаты x игрока 
                     или координата y вражеского персонажа больше координаты y игрока'''
+                        move_vec = pygame.math.Vector2(left, up)
+                        move_vec.scale_to_length(self.speed)
                         self.animation = [True, False, False, False, self.animation[4]]
-                        self.rect.x, self.rect.y = self.rect.x + left, self.rect.y + up
-                    elif self.rect.x < x and self.rect.y < y:
+                        self.rect.x, self.rect.y = self.rect.x + move_vec.x, self.rect.y + move_vec.y
+                    elif self.rect.x < x and self.rect.y < y and (right or down):
+                        move_vec = pygame.math.Vector2(right, down)
+                        move_vec.scale_to_length(self.speed)
                         self.animation = [False, True, False, False, self.animation[4]]
-                        self.rect.x, self.rect.y = self.rect.x + right, self.rect.y + down
-                    elif self.rect.x < x and self.rect.y > y:
+                        self.rect.x, self.rect.y = self.rect.x + move_vec.x, self.rect.y + move_vec.y
+                    elif self.rect.x < x and self.rect.y > y and (right or up):
+                        move_vec = pygame.math.Vector2(right, up)
+                        move_vec.scale_to_length(self.speed)
                         self.animation = [False, True, False, False, self.animation[4]]
-                        self.rect.x, self.rect.y = self.rect.x + right, self.rect.y + up
+                        self.rect.x, self.rect.y = self.rect.x + move_vec.x, self.rect.y + move_vec.y
                     elif self.rect.x > x and self.rect.y < y and (self.rect.x - x > 1 if self.e_type == 3 else True):
-                        self.animation = [True, False, False, False, self.animation[4]]
-                        self.rect.x, self.rect.y = self.rect.x + left, self.rect.y + down
+                        if left or down:
+                            move_vec = pygame.math.Vector2(left, down)
+                            move_vec.scale_to_length(self.speed)
+                            self.animation = [True, False, False, False, self.animation[4]]
+                            self.rect.x, self.rect.y = self.rect.x + move_vec.x, self.rect.y + move_vec.y
                 elif self.rect.y != y:
                     if self.rect.y < y:
                         self.animation = [False, False, True, False, self.animation[4]]
@@ -421,10 +435,8 @@ def generate_level(level):
 
 
 def start_screen():
-    intro_text = ["ЗАСТАВКА", "",
-                  "Правила игры",
-                  "Если в правилах несколько строк,",
-                  "приходится выводить их построчно"]
+    intro_text = ["ЗАСТАВКА", "", "Правила игры", "Если в правилах несколько строк,",
+                  "приходится выводить их построчно", "Фон - плейсхолдер. Потом заменю!!!"]
 
     fon = pygame.transform.scale(load_image('fon.jpg'), (width, height))
     screen.blit(fon, (0, 0))
@@ -438,7 +450,6 @@ def start_screen():
         intro_rect.x = 10
         text_coord += intro_rect.height
         screen.blit(string_rendered, intro_rect)
-
     while True:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:

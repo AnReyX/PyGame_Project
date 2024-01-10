@@ -269,7 +269,7 @@ class Enemy(pygame.sprite.Sprite):
         super().__init__(all_sprites, enemy_sprite)
         self.e_type = e_type
         self.animation = [False, False, False, False, False]  # left, right, down, up, enemy_is_near
-        self.anim_n = [[0, animated_images[f'{i}_enemy{e_type}'][1]] for i in ('left', 'right', 'up', 'down')]
+        self.animation_count = 0
         self.flag = False
         if e_type == 1:
             self.health = 7
@@ -287,12 +287,10 @@ class Enemy(pygame.sprite.Sprite):
         right, left, up, down = self.speed, -self.speed, -self.speed, self.speed
         if self.health <= 0:
             player.killed_enemies += 1
-            if player.pack < 5 or player.hp != 10:
-                chance = rd.random()
-                if 0 <= chance <= 0.2:
-                    Drop(*self.rect.center, 1)
-                elif 0.8 <= chance <= 1:
-                    Drop(*self.rect.center, 2)
+            if player.pack < 5 and rd.random() <= 0.2:
+                Drop(self.rect.left, self.rect.y, 1)
+            if player.hp != 10 and rd.random() <= 0.2:
+                Drop(self.rect.right, self.rect.y, 2)
             self.kill()
         elif self.health < self.hp:
             pygame.draw.rect(screen, (0, 0, 0), (self.rect.x - 10, self.rect.y - 15, self.rect.width + 20, 10))
@@ -369,17 +367,17 @@ class Enemy(pygame.sprite.Sprite):
             else:
                 self.animation = [False, False, False, False, self.animation[4]]
         if self.animation[0]:  # Анимация перемещения влево
-            self.image = animated_images[f'left_enemy{self.e_type}'][0][self.anim_n[0][0] // self.anim_n[0][1]]
-            self.anim_n[0][0] = self.anim_n[0][0] + 1 if self.anim_n[0][0] != self.anim_n[0][1] ** 2 - 1 else 0
+            self.image = animated_images[f'left_enemy{self.e_type}'][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
         elif self.animation[1]:  # Анимация перемещения вправо
-            self.image = animated_images[f'right_enemy{self.e_type}'][0][self.anim_n[1][0] // self.anim_n[1][1]]
-            self.anim_n[1][0] = self.anim_n[1][0] + 1 if self.anim_n[1][0] != self.anim_n[1][1] ** 2 - 1 else 0
-        elif self.animation[2]:  # Анимация перемещения
-            self.image = animated_images[f'down_enemy{self.e_type}'][0][self.anim_n[3][0] // self.anim_n[3][1]]
-            self.anim_n[3][0] = self.anim_n[3][0] + 1 if self.anim_n[3][0] != self.anim_n[3][1] ** 2 - 1 else 0
+            self.image = animated_images[f'right_enemy{self.e_type}'][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
+        elif self.animation[2]:  # Анимация перемещения вниз
+            self.image = animated_images[f'down_enemy{self.e_type}'][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
         elif self.animation[3]:  # Анимация перемещения вверх
-            self.image = animated_images[f'up_enemy{self.e_type}'][0][self.anim_n[2][0] // self.anim_n[2][1]]
-            self.anim_n[2][0] = self.anim_n[2][0] + 1 if self.anim_n[2][0] != self.anim_n[2][1] ** 2 - 1 else 0
+            self.image = animated_images[f'up_enemy{self.e_type}'][self.animation_count // 4]
+            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
         else:
             self.image = animated_images[f'stand_enemy{self.e_type}']
 
@@ -433,7 +431,7 @@ def start_screen():
     text = pygame.font.Font(None, 30)
     text_coord = 50
     for string in intro_text:
-        string_rendered = text.render(string, 1, pygame.Color('black'))
+        string_rendered = text.render(string, True, pygame.Color('black'))
         intro_rect = string_rendered.get_rect()
         text_coord += 10
         intro_rect.top = text_coord
@@ -506,20 +504,20 @@ animated_images = {
         'player_up': [[pygame.image.load(f'data\player_{j}up_{i}.png') for i in range(1, 5)] for j in ('k', '')],
         'player_down': [[pygame.image.load(f'data\player_{j}down_{i}.png') for i in range(1, 5)] for j in ('k', '')],
         'stand_enemy1': pygame.image.load('data\enemy_stand.png'),
-        'right_enemy1': [[pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)], 4],
-        'left_enemy1': [[pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)], 4],
-        'up_enemy1': [[pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)], 4],
-        'down_enemy1': [[pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)], 4],
+        'right_enemy1': [pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)],
+        'left_enemy1': [pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)],
+        'up_enemy1': [pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)],
+        'down_enemy1': [pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)],
         'stand_enemy2': pygame.image.load('data\_red_down_1.png'),
-        'right_enemy2': [[pygame.image.load(f'data\_red_right_{i}.png') for i in range(1, 4)], 3],
-        'left_enemy2': [[pygame.image.load(f'data\_red_left_{i}.png') for i in range(1, 4)], 3],
-        'up_enemy2': [[pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 5)], 4],
-        'down_enemy2': [[pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 5)], 4],
+        'right_enemy2': [pygame.image.load(f'data\_red_right_{i}.png') for i in range(1, 5)],
+        'left_enemy2': [pygame.image.load(f'data\_red_left_{i}.png') for i in range(1, 5)],
+        'up_enemy2': [pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 5)],
+        'down_enemy2': [pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 5)],
         'stand_enemy3': pygame.image.load('data\_yellow_down_1.png'),
-        'right_enemy3': [[pygame.image.load(f'data\_yellow_right_{i}.png') for i in range(1, 4)], 3],
-        'left_enemy3': [[pygame.image.load(f'data\_yellow_left_{i}.png') for i in range(1, 4)], 3],
-        'up_enemy3': [[pygame.image.load(f'data\_yellow_up_{i}.png') for i in range(1, 5)], 4],
-        'down_enemy3': [[pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)], 4]
+        'right_enemy3': [pygame.image.load(f'data\_yellow_right_{i}.png') for i in range(1, 5)],
+        'left_enemy3': [pygame.image.load(f'data\_yellow_left_{i}.png') for i in range(1, 5)],
+        'up_enemy3': [pygame.image.load(f'data\_yellow_up_{i}.png') for i in range(1, 5)],
+        'down_enemy3': [pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)]
 }
 knife_image = load_image('knife.png')
 box_image = load_image('ammo_drop.PNG')

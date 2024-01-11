@@ -1,6 +1,7 @@
 import os
 import sys
 import pygame
+import pygame_menu
 import math
 import random as rd
 
@@ -304,13 +305,13 @@ class Enemy(pygame.sprite.Sprite):
                 for _ in range(2):
                     del sp[0]
             for i in sp:
-                if i[3] >= self.rect.bottom - 2:
+                if i[3] >= self.rect.bottom - (2 if self.e_type != 3 else 6):
                     down = 0
-                if i[1] <= self.rect.left + 5:
+                if i[1] <= self.rect.left + (5 if self.e_type != 3 else 9):
                     left = 0
-                if i[2] <= self.rect.top + 5:
+                if i[2] <= self.rect.top + (5 if self.e_type != 3 else 9):
                     up = 0
-                if i[0] >= self.rect.right - 4:
+                if i[0] >= self.rect.right - (4 if self.e_type != 3 else 8):
                     right = 0
             self.flag = True
         elif self.flag:
@@ -323,7 +324,7 @@ class Enemy(pygame.sprite.Sprite):
             if self.e_type == 1:
                 self.animation = [False, False, False, False, True]
             else:
-                self.speed = 5
+                self.speed = 4
         elif self.e_type != 2:
             if self.e_type == 1:
                 self.animation[4] = False
@@ -435,29 +436,42 @@ def generate_level(level):
 
 
 def start_screen():
-    intro_text = ["ЗАСТАВКА", "", "Правила игры", "Если в правилах несколько строк,",
-                  "приходится выводить их построчно", "Фон - плейсхолдер. Потом заменю!!!"]
+    def start_the_game():
+        menu.disable()
 
-    fon = pygame.transform.scale(load_image('fon.jpg'), (width, height))
+    menu = pygame_menu.Menu('Snake Arena', 400, 300,
+                            theme=pygame_menu.themes.THEME_BLUE)
+    menu.add.button('Play', start_the_game)
+    menu.add.button('Settings')
+    menu.add.button('About')
+    menu.add.button('Quit', pygame_menu.events.EXIT)
+    menu.mainloop(screen)
+    """fon = pygame.transform.scale(load_image('fon.jpg'), (width, height))
     screen.blit(fon, (0, 0))
-    text = pygame.font.Font(None, 30)
-    text_coord = 50
-    for string in intro_text:
-        string_rendered = text.render(string, True, pygame.Color('black'))
-        intro_rect = string_rendered.get_rect()
-        text_coord += 10
-        intro_rect.top = text_coord
-        intro_rect.x = 10
-        text_coord += intro_rect.height
-        screen.blit(string_rendered, intro_rect)
+    h = 150
+    buttons_coord = []
+    for i in ('Play!', 'Settings', 'About', 'Quit'):
+        button_surface = pygame.Surface((200, 50))
+        pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 200, 50))
+        pygame.draw.rect(button_surface, (255, 255, 255), (5, 5, 190, 40))
+        txt = font.render(i, True, (0, 0, 0))
+        button_surface.blit(txt, ((200 - txt.get_width()) // 2, 10))
+        screen.blit(button_surface, (width // 2 - 85, h))
+        buttons_coord += [(pygame.Rect(290, h, 200, 50), i)]
+        h += 100
     while True:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 terminate()
-            elif ev.type == pygame.KEYDOWN or ev.type == pygame.MOUSEBUTTONDOWN:
-                return  # начинаем игру
+            elif ev.type == pygame.MOUSEBUTTONDOWN:
+                for i in buttons_coord:
+                    if i[0].collidepoint(*ev.pos):
+                        if i[1] == 'Play!':
+                            return
+                        elif i[1] == 'Quit':
+                            terminate()
         pygame.display.flip()
-        clock.tick(fps)
+        clock.tick(fps)"""
 
 
 def display_ui():
@@ -598,6 +612,7 @@ while True:
                 player.weapon = 1
             elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
                 player.weapon = 0
+                player.is_reloading = False if player.is_reloading else True
             if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
                 pygame.time.set_timer(allow_reload, 3000)
                 player.is_reloading = not player.is_reloading

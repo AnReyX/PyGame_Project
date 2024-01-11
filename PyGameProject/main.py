@@ -439,8 +439,9 @@ def start_screen():
     def start_the_game():
         menu.disable()
 
-    menu = pygame_menu.Menu('Snake Arena', 400, 300,
-                            theme=pygame_menu.themes.THEME_BLUE)
+    mytheme = pygame_menu.Theme(background_color=(0, 0, 0), title_background_color=(4, 47, 126),)
+    mytheme.background_color = pygame_menu.BaseImage('data/fon.jpg')
+    menu = pygame_menu.Menu('Snake Arena', width, height, theme=mytheme)
     menu.add.button('Play', start_the_game)
     menu.add.button('Settings')
     menu.add.button('About')

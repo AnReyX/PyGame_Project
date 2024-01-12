@@ -437,10 +437,19 @@ def generate_level(level):
 
 def start_screen():
     def start_the_game():
+        black_surface = pygame.Surface((width, height), flags=pygame.SRCALPHA)
+        color = (0, 0, 0, 1)
+        black_surface.fill(color)
+        alpha_key = 1
+        while alpha_key <= 255:
+            screen.blit(black_surface, screen.get_rect())
+            pygame.display.flip()
+            alpha_key = alpha_key + 1
+            pygame.time.wait(2)
         menu.disable()
 
     mytheme = pygame_menu.Theme(background_color=(0, 0, 0), title_background_color=(4, 47, 126),)
-    mytheme.background_color = pygame_menu.BaseImage('data/fon.jpg')
+    mytheme.background_color = pygame_menu.BaseImage('data/bg2.png')
     menu = pygame_menu.Menu('Snake Arena', width, height, theme=mytheme)
     menu.add.button('Play', start_the_game)
     menu.add.button('Settings')

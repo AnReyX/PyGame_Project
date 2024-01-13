@@ -456,32 +456,6 @@ def start_screen():
     menu.add.button('About')
     menu.add.button('Quit', pygame_menu.events.EXIT)
     menu.mainloop(screen)
-    """fon = pygame.transform.scale(load_image('fon.jpg'), (width, height))
-    screen.blit(fon, (0, 0))
-    h = 150
-    buttons_coord = []
-    for i in ('Play!', 'Settings', 'About', 'Quit'):
-        button_surface = pygame.Surface((200, 50))
-        pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 200, 50))
-        pygame.draw.rect(button_surface, (255, 255, 255), (5, 5, 190, 40))
-        txt = font.render(i, True, (0, 0, 0))
-        button_surface.blit(txt, ((200 - txt.get_width()) // 2, 10))
-        screen.blit(button_surface, (width // 2 - 85, h))
-        buttons_coord += [(pygame.Rect(290, h, 200, 50), i)]
-        h += 100
-    while True:
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                terminate()
-            elif ev.type == pygame.MOUSEBUTTONDOWN:
-                for i in buttons_coord:
-                    if i[0].collidepoint(*ev.pos):
-                        if i[1] == 'Play!':
-                            return
-                        elif i[1] == 'Quit':
-                            terminate()
-        pygame.display.flip()
-        clock.tick(fps)"""
 
 
 def display_ui():

@@ -4,6 +4,7 @@ import pygame
 import pygame_menu
 import math
 import random as rd
+from functools import partial
 
 pygame.init()
 pygame.display.set_caption('Snake Arena')
@@ -13,6 +14,7 @@ font = pygame.font.SysFont('timesNewRoman', 25)
 clock = pygame.time.Clock()
 fps = 60
 screen = pygame.display.set_mode(size)
+game_is_running = True
 
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
@@ -37,6 +39,65 @@ tile_len = 50
 step = 5
 
 spawned_enemies = 0
+
+
+def start_the_game():
+    black_surface = pygame.Surface((width, height), flags=pygame.SRCALPHA)
+    color = (0, 0, 0, 1)
+    black_surface.fill(color)
+    alpha_key = 1
+    while alpha_key <= 255:
+        screen.blit(black_surface, screen.get_rect())
+        pygame.display.flip()
+        alpha_key = alpha_key + 1
+        pygame.time.wait(3)
+    level_sel_menu.disable()
+
+
+def to_settings():
+    menu.disable()
+    settings_menu.enable()
+    settings_menu.mainloop(screen)
+
+
+def to_about():
+    menu.disable()
+    about_menu.enable()
+    about_menu.mainloop(screen)
+
+
+def to_level_selection():
+    menu.disable()
+    level_sel_menu.enable()
+    level_sel_menu.mainloop(screen)
+
+
+def to_main_menu(from_menu):
+    from_menu.disable()
+    menu.enable()
+    menu.mainloop(screen)
+
+
+image = pygame_menu.BaseImage('data/bg2.png')
+theme = pygame_menu.Theme(background_color=image, widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=40,
+                          title=False)
+mainTheme = pygame_menu.Theme(background_color=image, title_background_color=(4, 47, 126),
+                              widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=50)
+menu = pygame_menu.Menu('Snake Arena', width, height, theme=mainTheme)
+settings_menu = pygame_menu.Menu('', width, height, theme=theme)
+about_menu = pygame_menu.Menu('', width, height, theme=theme)
+level_sel_menu = pygame_menu.Menu('', width, height, theme=theme)
+level_sel_menu.add.label('You are in\n Level selection menu!')
+level_sel_menu.add.button('Play level 1 (DEMO)', start_the_game)
+level_sel_menu.add.button('Back', partial(to_main_menu, level_sel_menu))
+settings_menu.add.label('You are in\n Settings menu!')
+settings_menu.add.button('Back', partial(to_main_menu, settings_menu))
+about_menu.add.label('You are in\n About menu!')
+about_menu.add.button('Back', partial(to_main_menu, about_menu))
+menu.add.button('Play', to_level_selection)
+menu.add.button('Settings', to_settings)
+menu.add.button('About', to_about)
+menu.add.button('Quit', pygame_menu.events.EXIT)
 
 
 def terminate():
@@ -78,16 +139,17 @@ class Bullet(pygame.sprite.Sprite):
             pygame.draw.rect(screen, (255, 255, 0), (self.rect.x, self.rect.y, 8, 8))
         else:
             pygame.draw.rect(screen, (225, 0, 0), (self.rect.x, self.rect.y, 12, 12))
-        self.rect.x, self.rect.y = int(self.rect.x + self.mov_vect.x), int(self.rect.y + self.mov_vect.y)
-        if pygame.sprite.spritecollideany(self, border_sprite) and not pygame.sprite.spritecollideany(self,
-                                                                                                      g_border_sprite):
-            self.kill()
-        if pygame.sprite.spritecollideany(self, enemy_sprite) and not self.type:
-            pygame.sprite.spritecollide(self, enemy_sprite, False)[0].health -= 1
-            self.kill()
-        if pygame.sprite.spritecollideany(self, player_sprite) and self.type:
-            player.damage()
-            self.kill()
+        if game_is_running:
+            self.rect.x, self.rect.y = int(self.rect.x + self.mov_vect.x), int(self.rect.y + self.mov_vect.y)
+            if pygame.sprite.spritecollideany(self, border_sprite) and not pygame.sprite.spritecollideany(
+                    self, g_border_sprite):
+                self.kill()
+            if pygame.sprite.spritecollideany(self, enemy_sprite) and not self.type:
+                pygame.sprite.spritecollide(self, enemy_sprite, False)[0].health -= 1
+                self.kill()
+            if pygame.sprite.spritecollideany(self, player_sprite) and self.type:
+                player.damage()
+                self.kill()
 
 
 class Knife(pygame.sprite.Sprite):
@@ -435,29 +497,6 @@ def generate_level(level):
     return new_player, x, y
 
 
-def start_screen():
-    def start_the_game():
-        black_surface = pygame.Surface((width, height), flags=pygame.SRCALPHA)
-        color = (0, 0, 0, 1)
-        black_surface.fill(color)
-        alpha_key = 1
-        while alpha_key <= 255:
-            screen.blit(black_surface, screen.get_rect())
-            pygame.display.flip()
-            alpha_key = alpha_key + 1
-            pygame.time.wait(2)
-        menu.disable()
-
-    mytheme = pygame_menu.Theme(background_color=(0, 0, 0), title_background_color=(4, 47, 126),)
-    mytheme.background_color = pygame_menu.BaseImage('data/bg2.png')
-    menu = pygame_menu.Menu('Snake Arena', width, height, theme=mytheme)
-    menu.add.button('Play', start_the_game)
-    menu.add.button('Settings')
-    menu.add.button('About')
-    menu.add.button('Quit', pygame_menu.events.EXIT)
-    menu.mainloop(screen)
-
-
 def display_ui():
     for i in range(10):
         if i < player.hp:
@@ -484,7 +523,6 @@ def text_display():
     return [(s1, r1), (s2, r2), (s3, r3), (s4, r4)] + ev_disp
 
 
-start_screen()
 level_map = load_level('level1.txt')
 tile_images = {
     'wall': load_image('wall.png'),
@@ -534,80 +572,105 @@ heart_image = load_image('heart.png')
 player, level_x, level_y = generate_level(level_map)
 camera = Camera()
 sf = 0
+pause_image = pygame.Surface([width, height], pygame.SRCALPHA)
+pygame.draw.rect(pause_image, (0, 0, 0, 100), (0, 0, width, height))
+pause_text = [font.render(i, True, (255, 255, 255)) for i in ('Пауза!', 'Нажмите на M (ь), чтобы выйти.',
+                                                              'Ваш прогресс сохранится.')]
+
+menu.mainloop(screen)
+
 while True:
-    if player.killed_enemies == 15:
-        print('You won! :3')
-        terminate()
     screen.fill((0, 0, 0))
-    camera.update(player)
-    for sprite in all_sprites:
-        camera.apply(sprite)
     border_sprite.draw(screen)
     g_border_sprite.draw(screen)
     tiles_sprite.draw(screen)
     spawner_sprite.draw(screen)
-    spawner_sprite.update()
     drops_sprite.draw(screen)
-    drops_sprite.update()
     bullets_sprite.draw(screen)
     knife_sprite.draw(screen)
-    knife_sprite.update()
     if (sf // 10) % 2 == 0:
         player_sprite.draw(screen)
     enemy_sprite.draw(screen)
-    enemy_sprite.update()
-    bullets_sprite.update()
     after_player_sprite.draw(screen)
+    bullets_sprite.update()
     for line in text_display():
         screen.blit(line[0], line[1])
     display_ui()
-    if player.safe_frames:
-        sf += 1
-    if sf == 100:
-        player.safe_frames = False
-        sf = 0
+    if game_is_running:
+        if player.killed_enemies == 15:
+            print('You won! :3')
+            terminate()
+        camera.update(player)
+        for sprite in all_sprites:
+            camera.apply(sprite)
+        spawner_sprite.update()
+        drops_sprite.update()
+        knife_sprite.update()
+        enemy_sprite.update()
+        if player.safe_frames:
+            sf += 1
+        if sf == 100:
+            player.safe_frames = False
+            sf = 0
+        player.move()
+    else:
+        screen.blit(pause_image, (0, 0))
+        for i in range(3):
+            screen.blit(pause_text[i], ((width - pause_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             print('You quited')
             terminate()
-        if event.type == allow_shoot and player.weapon:
-            pygame.time.set_timer(allow_shoot, 150)
-            player.shoot()
-        if event.type == allow_hit and not player.weapon:
-            pygame.time.set_timer(allow_hit, 500)
-            player.hit()
-        if event.type == enemy_shoot:
-            for enemy in enemy_sprite:
-                enemy.shoot()
-        if event.type == allow_reload and player.is_reloading:
-            player.reload()
-            player.is_reloading = False
-        if not player.is_reloading:
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                player.is_shooting = True
-                player.is_hitting = True
-                pygame.time.set_timer(allow_shoot, 10)
-                pygame.time.set_timer(allow_hit, 10)
-            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                player.is_shooting = False
-                player.is_hitting = False
-        if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
-            if event.key == pygame.K_1 and event.type == pygame.KEYDOWN:
-                player.weapon = 1
-            elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
-                player.weapon = 0
-                player.is_reloading = False if player.is_reloading else True
-            if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
-                pygame.time.set_timer(allow_reload, 3000)
-                player.is_reloading = not player.is_reloading
-            if event.key == pygame.K_UP or event.key == pygame.K_w:
-                moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
-            if event.key == pygame.K_DOWN or event.key == pygame.K_s:
-                moves['d'] = 1 if event.type == pygame.KEYDOWN else 0
-            if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
-                moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
-            if event.key == pygame.K_LEFT or event.key == pygame.K_a:
-                moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
-    player.move()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                game_is_running = not game_is_running
+                moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
+        if game_is_running:
+            if event.type == allow_shoot and player.weapon:
+                pygame.time.set_timer(allow_shoot, 150)
+                player.shoot()
+            if event.type == allow_hit and not player.weapon:
+                pygame.time.set_timer(allow_hit, 500)
+                player.hit()
+            if event.type == enemy_shoot:
+                for enemy in enemy_sprite:
+                    enemy.shoot()
+            if event.type == allow_reload and player.is_reloading:
+                player.reload()
+                player.is_reloading = False
+            if not player.is_reloading:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    player.is_shooting = True
+                    player.is_hitting = True
+                    pygame.time.set_timer(allow_shoot, 10)
+                    pygame.time.set_timer(allow_hit, 10)
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    player.is_shooting = False
+                    player.is_hitting = False
+            if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
+                if event.key == pygame.K_ESCAPE and event.type == pygame.KEYDOWN:
+                    ...
+                if event.key == pygame.K_1 and event.type == pygame.KEYDOWN:
+                    player.weapon = 1
+                elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
+                    player.weapon = 0
+                    player.is_reloading = False
+                if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
+                    pygame.time.set_timer(allow_reload, 3000)
+                    player.is_reloading = not player.is_reloading
+                if event.key == pygame.K_UP or event.key == pygame.K_w:
+                    moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
+                if event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                    moves['d'] = 1 if event.type == pygame.KEYDOWN else 0
+                if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                    moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
+                if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                    moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
+        else:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_m:
+                    menu.enable()
+                    menu.mainloop(screen)
+                    game_is_running = True
     clock.tick(fps)
     pygame.display.flip()

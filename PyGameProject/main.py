@@ -24,6 +24,13 @@ p_text = [font.render(text, True, (255, 255, 255)) for text in ('Пауза!', '
                                                                     'ВНИМАНИЕ! Ваш прогресс НЕ сохранится.')]
 w_text = [font.render(text, True, (255, 255, 255)) for text in ('Победа!', 'Нажмите на M (ь), чтобы выйти.')]
 
+sound_shoot = pygame.mixer.Sound('data/shoot_sfx.wav')
+sound_reload = pygame.mixer.Sound('data/reload_sfx.mp3')
+sound_swing = pygame.mixer.Sound('data/knife_sfx.mp3')
+sound_heal = pygame.mixer.Sound('data/heal_sfx.wav')
+sound_pick = pygame.mixer.Sound('data/ammo_pick_sfx.mp3')
+sound_hurt = pygame.mixer.Sound('data/hurt_sfx.wav')
+
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
 border_sprite = pygame.sprite.Group()
@@ -202,7 +209,12 @@ def mainloop():
                         player.is_reloading = False
                     if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
                         pygame.time.set_timer(allow_reload, 3000)
-                        player.is_reloading = not player.is_reloading
+                        if player.is_reloading:
+                            player.is_reloading = False
+                            sound_reload.stop()
+                        else:
+                            player.is_reloading = True
+                            sound_reload.play(0)
                     if event.key == pygame.K_UP or event.key == pygame.K_w:
                         moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
                     if event.key == pygame.K_DOWN or event.key == pygame.K_s:
@@ -403,10 +415,12 @@ class Player(pygame.sprite.Sprite):
     def shoot(self):
         if self.is_shooting and self.ammo != 0:
             Bullet(*self.rect.center, *pygame.mouse.get_pos(), False)
+            sound_shoot.play(0)
             self.ammo -= 1
 
     def hit(self):
         if self.is_hitting:
+            sound_swing.play(0)
             Knife(*pygame.mouse.get_pos())
 
     def reload(self):
@@ -418,6 +432,7 @@ class Player(pygame.sprite.Sprite):
         global game_is_running
         global player_is_dead
         if not self.safe_frames:
+            sound_hurt.play(0)
             self.hp -= 1
             if self.hp == 0:
                 print('You lost :(')
@@ -454,9 +469,11 @@ class Drop(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, player_sprite):
             if player.pack < 5 and self.drop_type == 1:
                 player.pack += 1
+                sound_pick.play(0)
                 self.kill()
             if player.hp != 10 and self.drop_type == 2:
                 player.hp += 1
+                sound_heal.play(0)
                 self.kill()
 
 

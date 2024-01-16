@@ -9,12 +9,20 @@ from functools import partial
 pygame.init()
 pygame.display.set_caption('Snake Arena')
 size = width, height = 750, 600
-moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
 font = pygame.font.SysFont('timesNewRoman', 25)
 clock = pygame.time.Clock()
 fps = 60
 screen = pygame.display.set_mode(size)
-game_is_running = True
+
+moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
+game_is_running, player_is_dead, spawned_enemies, sf = True, False, 0, 0
+tile_len, step = 50, 5
+level_selected, is_win = '', False
+pause_image = pygame.Surface([width, height], pygame.SRCALPHA)
+pygame.draw.rect(pause_image, (0, 0, 0, 100), (0, 0, width, height))
+p_text = [font.render(text, True, (255, 255, 255)) for text in ('Пауза!', 'Нажмите на M (ь), чтобы выйти.',
+                                                                    'ВНИМАНИЕ! Ваш прогресс НЕ сохранится.')]
+w_text = [font.render(text, True, (255, 255, 255)) for text in ('Победа!', 'Нажмите на M (ь), чтобы выйти.')]
 
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
@@ -35,13 +43,9 @@ allow_hit = pygame.USEREVENT + 3
 
 pygame.time.set_timer(enemy_shoot, 500)
 
-tile_len = 50
-step = 5
-
-spawned_enemies = 0
-
 
 def start_the_game():
+    global level_map, player, level_x, level_y, level_selected, game_is_running, player_is_dead, spawned_enemies, sf
     black_surface = pygame.Surface((width, height), flags=pygame.SRCALPHA)
     color = (0, 0, 0, 1)
     black_surface.fill(color)
@@ -52,6 +56,15 @@ def start_the_game():
         alpha_key = alpha_key + 1
         pygame.time.wait(3)
     level_sel_menu.disable()
+    if level_selected:
+        for i in all_sprites:
+            i.kill()
+        game_is_running, player_is_dead, spawned_enemies, sf = True, False, 0, 0
+        level_map = load_level('level1.txt')
+        player, level_x, level_y = generate_level(level_map)
+    else:
+        level_selected = 'level1.txt'
+    mainloop()
 
 
 def to_settings():
@@ -100,6 +113,114 @@ menu.add.button('About', to_about)
 menu.add.button('Quit', pygame_menu.events.EXIT)
 
 
+def mainloop():
+    global moves, game_is_running, sf, is_win
+    while True:
+        if not player_is_dead:
+            screen.fill((0, 0, 0))
+            border_sprite.draw(screen)
+            g_border_sprite.draw(screen)
+            tiles_sprite.draw(screen)
+            spawner_sprite.draw(screen)
+            drops_sprite.draw(screen)
+            bullets_sprite.draw(screen)
+            knife_sprite.draw(screen)
+            if (sf // 10) % 2 == 0:
+                player_sprite.draw(screen)
+            enemy_sprite.draw(screen)
+            after_player_sprite.draw(screen)
+            bullets_sprite.update()
+            for line in text_display():
+                screen.blit(line[0], line[1])
+            display_ui()
+            if game_is_running:
+                if player.killed_enemies == 15:
+                    is_win = True
+                    game_is_running = False
+                camera.update(player)
+                for sprite in all_sprites:
+                    camera.apply(sprite)
+                spawner_sprite.update()
+                drops_sprite.update()
+                knife_sprite.update()
+                enemy_sprite.update()
+                if player.safe_frames:
+                    sf += 1
+                if sf == 100:
+                    player.safe_frames = False
+                    sf = 0
+                player.move()
+            else:
+                screen.blit(pause_image, (0, 0))
+                for i in range(2 if is_win else 3):
+                    if is_win:
+                        screen.blit(w_text[i], ((width - w_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
+                    else:
+                        screen.blit(p_text[i], ((width - p_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
+        else:
+            screen.blit(loose_screen, (0, 0))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                print('You quited')
+                terminate()
+            if player_is_dead and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    menu.enable()
+                    menu.mainloop(screen)
+                    return
+            if event.type == pygame.KEYDOWN and not player_is_dead and not is_win:
+                if event.key == pygame.K_ESCAPE:
+                    game_is_running = not game_is_running
+                    moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
+            if game_is_running and not player_is_dead:
+                if event.type == allow_shoot and player.weapon:
+                    pygame.time.set_timer(allow_shoot, 150)
+                    player.shoot()
+                if event.type == allow_hit and not player.weapon:
+                    pygame.time.set_timer(allow_hit, 500)
+                    player.hit()
+                if event.type == enemy_shoot:
+                    for enemy in enemy_sprite:
+                        enemy.shoot()
+                if event.type == allow_reload and player.is_reloading:
+                    player.reload()
+                    player.is_reloading = False
+                if not player.is_reloading:
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        player.is_shooting = True
+                        player.is_hitting = True
+                        pygame.time.set_timer(allow_shoot, 10)
+                        pygame.time.set_timer(allow_hit, 10)
+                    elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                        player.is_shooting = False
+                        player.is_hitting = False
+                if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
+                    if event.key == pygame.K_1 and event.type == pygame.KEYDOWN:
+                        player.weapon = 1
+                    elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
+                        player.weapon = 0
+                        player.is_reloading = False
+                    if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
+                        pygame.time.set_timer(allow_reload, 3000)
+                        player.is_reloading = not player.is_reloading
+                    if event.key == pygame.K_UP or event.key == pygame.K_w:
+                        moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
+                    if event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                        moves['d'] = 1 if event.type == pygame.KEYDOWN else 0
+                    if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                        moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
+                    if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                        moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
+            elif not player_is_dead:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_m:
+                        menu.enable()
+                        menu.mainloop(screen)
+                        game_is_running = True
+        clock.tick(fps)
+        pygame.display.flip()
+
+
 def terminate():
     pygame.quit()
     sys.exit()
@@ -110,15 +231,63 @@ def load_image(name, colorkey=None):
     if not os.path.isfile(fullname):
         print(f"Файл с изображением '{fullname}' не найден")
         sys.exit()
-    image = pygame.image.load(fullname)
+    im = pygame.image.load(fullname)
     if colorkey is not None:
-        image = image.convert()
+        im = im.convert()
         if colorkey == -1:
-            colorkey = image.get_at((0, 0))
-        image.set_colorkey(colorkey)
+            colorkey = im.get_at((0, 0))
+        im.set_colorkey(colorkey)
     else:
-        image = image.convert_alpha()
-    return image
+        im = im.convert_alpha()
+    return im
+
+
+tile_images = {
+    'wall': load_image('wall.png'),
+    'empty': load_image('grass.png'),
+    'water': load_image('water.png'),
+    'sand': load_image('sand.png'),
+    'dirt': load_image('dirt.png'),
+    'box': load_image('box.png'),
+    'tree': load_image('plant.png'),
+    'plant_1': load_image('plant_123.png'),
+    'plant_2': load_image('plant_2.png'),
+    'plant_3': load_image('plant_3.png'),
+    'block': load_image('block.png'),
+    'spawner': load_image('spawner.png')
+}
+ui_images = {
+    'heart': load_image('heart.png'),
+    'empty_heart': load_image('empty_heart.png'),
+    'bullet': load_image('bullet.png'),
+    'ammo_pack': load_image('ammo_pack.png')
+}
+animated_images = {
+        'player_stand': [pygame.image.load(f'data\player_{j}stand.png') for j in ('k', '')],
+        'player_right': [[pygame.image.load(f'data\player_{j}right_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'player_left': [[pygame.image.load(f'data\player_{j}left_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'player_up': [[pygame.image.load(f'data\player_{j}up_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'player_down': [[pygame.image.load(f'data\player_{j}down_{i}.png') for i in range(1, 5)] for j in ('k', '')],
+        'stand_enemy1': pygame.image.load('data\enemy_stand.png'),
+        'right_enemy1': [pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)],
+        'left_enemy1': [pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)],
+        'up_enemy1': [pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)],
+        'down_enemy1': [pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)],
+        'stand_enemy2': pygame.image.load('data\_red_down_1.png'),
+        'right_enemy2': [pygame.image.load(f'data\_red_right_{i}.png') for i in range(1, 5)],
+        'left_enemy2': [pygame.image.load(f'data\_red_left_{i}.png') for i in range(1, 5)],
+        'up_enemy2': [pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 5)],
+        'down_enemy2': [pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 5)],
+        'stand_enemy3': pygame.image.load('data\_yellow_down_1.png'),
+        'right_enemy3': [pygame.image.load(f'data\_yellow_right_{i}.png') for i in range(1, 5)],
+        'left_enemy3': [pygame.image.load(f'data\_yellow_left_{i}.png') for i in range(1, 5)],
+        'up_enemy3': [pygame.image.load(f'data\_yellow_up_{i}.png') for i in range(1, 5)],
+        'down_enemy3': [pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)]
+}
+knife_image = load_image('knife.png')
+box_image = load_image('ammo_drop.PNG')
+heart_image = load_image('heart.png')
+loose_screen = load_image('death_screen.png')
 
 
 class Bullet(pygame.sprite.Sprite):
@@ -154,7 +323,7 @@ class Bullet(pygame.sprite.Sprite):
 
 class Knife(pygame.sprite.Sprite):
     def __init__(self, x, y):
-        super().__init__(knife_sprite)
+        super().__init__(knife_sprite, all_sprites)
         self.ticks = 0
         self.rect = player.rect
         direction = (pygame.math.Vector2(x, y) - self.rect.center).angle_to((1, 0)) - 90
@@ -164,8 +333,8 @@ class Knife(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=self.rect.center)
 
     def update(self):
-        self.rect.x += (self.x_move if self.ticks < 10 else -self.x_move)
-        self.rect.y += (self.y_move if self.ticks < 10 else -self.y_move)
+        self.rect.x += (self.x_move if self.ticks < 10 else -self.x_move) - camera.dx
+        self.rect.y += (self.y_move if self.ticks < 10 else -self.y_move) - camera.dy
         if pygame.sprite.spritecollideany(self, enemy_sprite) and self.ticks == 10:
             for en in pygame.sprite.spritecollide(self, enemy_sprite, False):
                 en.health -= 1
@@ -246,11 +415,14 @@ class Player(pygame.sprite.Sprite):
             self.pack -= 1
 
     def damage(self):
+        global game_is_running
+        global player_is_dead
         if not self.safe_frames:
             self.hp -= 1
             if self.hp == 0:
                 print('You lost :(')
-                terminate()
+                game_is_running = False
+                player_is_dead = True
             self.safe_frames = True
 
 
@@ -300,6 +472,9 @@ class Camera:
     def update(self, target):
         self.dx = -(target.rect.x + target.rect.w // 2 - width // 2)
         self.dy = -(target.rect.y + target.rect.h // 2 - height // 2)
+
+
+camera = Camera()
 
 
 class Spawner(pygame.sprite.Sprite):
@@ -524,153 +699,6 @@ def text_display():
 
 
 level_map = load_level('level1.txt')
-tile_images = {
-    'wall': load_image('wall.png'),
-    'empty': load_image('grass.png'),
-    'water': load_image('water.png'),
-    'sand': load_image('sand.png'),
-    'dirt': load_image('dirt.png'),
-    'box': load_image('box.png'),
-    'tree': load_image('plant.png'),
-    'plant_1': load_image('plant_123.png'),
-    'plant_2': load_image('plant_2.png'),
-    'plant_3': load_image('plant_3.png'),
-    'block': load_image('block.png'),
-    'spawner': load_image('spawner.png')
-}
-ui_images = {
-    'heart': load_image('heart.png'),
-    'empty_heart': load_image('empty_heart.png'),
-    'bullet': load_image('bullet.png'),
-    'ammo_pack': load_image('ammo_pack.png')
-}
-animated_images = {
-        'player_stand': [pygame.image.load(f'data\player_{j}stand.png') for j in ('k', '')],
-        'player_right': [[pygame.image.load(f'data\player_{j}right_{i}.png') for i in range(1, 5)] for j in ('k', '')],
-        'player_left': [[pygame.image.load(f'data\player_{j}left_{i}.png') for i in range(1, 5)] for j in ('k', '')],
-        'player_up': [[pygame.image.load(f'data\player_{j}up_{i}.png') for i in range(1, 5)] for j in ('k', '')],
-        'player_down': [[pygame.image.load(f'data\player_{j}down_{i}.png') for i in range(1, 5)] for j in ('k', '')],
-        'stand_enemy1': pygame.image.load('data\enemy_stand.png'),
-        'right_enemy1': [pygame.image.load(f'data\enemy_right_{i}.png') for i in range(1, 5)],
-        'left_enemy1': [pygame.image.load(f'data\enemy_left_{i}.png') for i in range(1, 5)],
-        'up_enemy1': [pygame.image.load(f'data\enemy_up_{i}.png') for i in range(1, 5)],
-        'down_enemy1': [pygame.image.load(f'data\enemy_down_{i}.png') for i in range(1, 5)],
-        'stand_enemy2': pygame.image.load('data\_red_down_1.png'),
-        'right_enemy2': [pygame.image.load(f'data\_red_right_{i}.png') for i in range(1, 5)],
-        'left_enemy2': [pygame.image.load(f'data\_red_left_{i}.png') for i in range(1, 5)],
-        'up_enemy2': [pygame.image.load(f'data\_red_up_{i}.png') for i in range(1, 5)],
-        'down_enemy2': [pygame.image.load(f'data\_red_down_{i}.png') for i in range(1, 5)],
-        'stand_enemy3': pygame.image.load('data\_yellow_down_1.png'),
-        'right_enemy3': [pygame.image.load(f'data\_yellow_right_{i}.png') for i in range(1, 5)],
-        'left_enemy3': [pygame.image.load(f'data\_yellow_left_{i}.png') for i in range(1, 5)],
-        'up_enemy3': [pygame.image.load(f'data\_yellow_up_{i}.png') for i in range(1, 5)],
-        'down_enemy3': [pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)]
-}
-knife_image = load_image('knife.png')
-box_image = load_image('ammo_drop.PNG')
-heart_image = load_image('heart.png')
 player, level_x, level_y = generate_level(level_map)
-camera = Camera()
-sf = 0
-pause_image = pygame.Surface([width, height], pygame.SRCALPHA)
-pygame.draw.rect(pause_image, (0, 0, 0, 100), (0, 0, width, height))
-pause_text = [font.render(i, True, (255, 255, 255)) for i in ('Пауза!', 'Нажмите на M (ь), чтобы выйти.',
-                                                              'Ваш прогресс сохранится.')]
 
 menu.mainloop(screen)
-
-while True:
-    screen.fill((0, 0, 0))
-    border_sprite.draw(screen)
-    g_border_sprite.draw(screen)
-    tiles_sprite.draw(screen)
-    spawner_sprite.draw(screen)
-    drops_sprite.draw(screen)
-    bullets_sprite.draw(screen)
-    knife_sprite.draw(screen)
-    if (sf // 10) % 2 == 0:
-        player_sprite.draw(screen)
-    enemy_sprite.draw(screen)
-    after_player_sprite.draw(screen)
-    bullets_sprite.update()
-    for line in text_display():
-        screen.blit(line[0], line[1])
-    display_ui()
-    if game_is_running:
-        if player.killed_enemies == 15:
-            print('You won! :3')
-            terminate()
-        camera.update(player)
-        for sprite in all_sprites:
-            camera.apply(sprite)
-        spawner_sprite.update()
-        drops_sprite.update()
-        knife_sprite.update()
-        enemy_sprite.update()
-        if player.safe_frames:
-            sf += 1
-        if sf == 100:
-            player.safe_frames = False
-            sf = 0
-        player.move()
-    else:
-        screen.blit(pause_image, (0, 0))
-        for i in range(3):
-            screen.blit(pause_text[i], ((width - pause_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            print('You quited')
-            terminate()
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                game_is_running = not game_is_running
-                moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
-        if game_is_running:
-            if event.type == allow_shoot and player.weapon:
-                pygame.time.set_timer(allow_shoot, 150)
-                player.shoot()
-            if event.type == allow_hit and not player.weapon:
-                pygame.time.set_timer(allow_hit, 500)
-                player.hit()
-            if event.type == enemy_shoot:
-                for enemy in enemy_sprite:
-                    enemy.shoot()
-            if event.type == allow_reload and player.is_reloading:
-                player.reload()
-                player.is_reloading = False
-            if not player.is_reloading:
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    player.is_shooting = True
-                    player.is_hitting = True
-                    pygame.time.set_timer(allow_shoot, 10)
-                    pygame.time.set_timer(allow_hit, 10)
-                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                    player.is_shooting = False
-                    player.is_hitting = False
-            if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
-                if event.key == pygame.K_ESCAPE and event.type == pygame.KEYDOWN:
-                    ...
-                if event.key == pygame.K_1 and event.type == pygame.KEYDOWN:
-                    player.weapon = 1
-                elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
-                    player.weapon = 0
-                    player.is_reloading = False
-                if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
-                    pygame.time.set_timer(allow_reload, 3000)
-                    player.is_reloading = not player.is_reloading
-                if event.key == pygame.K_UP or event.key == pygame.K_w:
-                    moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
-                if event.key == pygame.K_DOWN or event.key == pygame.K_s:
-                    moves['d'] = 1 if event.type == pygame.KEYDOWN else 0
-                if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
-                    moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
-                if event.key == pygame.K_LEFT or event.key == pygame.K_a:
-                    moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
-        else:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_m:
-                    menu.enable()
-                    menu.mainloop(screen)
-                    game_is_running = True
-    clock.tick(fps)
-    pygame.display.flip()

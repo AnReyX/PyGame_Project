@@ -226,11 +226,12 @@ def mainloop():
                         moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
                     elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
                         moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_m:
-                    pygame.mixer.music.stop()
-                    menu.enable()
-                    menu.mainloop(screen)
+            else:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_m:
+                        pygame.mixer.music.stop()
+                        menu.enable()
+                        menu.mainloop(screen)
         clock.tick(fps)
         pygame.display.flip()
 

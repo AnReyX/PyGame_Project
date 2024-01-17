@@ -8,6 +8,7 @@ from functools import partial
 
 pygame.init()
 pygame.display.set_caption('Snake Arena')
+pygame.display.set_icon(pygame.image.load('data/icon.png'))
 size = width, height = 750, 600
 font = pygame.font.SysFont('timesNewRoman', 25)
 clock = pygame.time.Clock()
@@ -24,12 +25,16 @@ p_text = [font.render(text, True, (255, 255, 255)) for text in ('Пауза!', '
                                                                     'ВНИМАНИЕ! Ваш прогресс НЕ сохранится.')]
 w_text = [font.render(text, True, (255, 255, 255)) for text in ('Победа!', 'Нажмите на M (ь), чтобы выйти.')]
 
-sound_shoot = pygame.mixer.Sound('data/shoot_sfx.wav')
-sound_reload = pygame.mixer.Sound('data/reload_sfx.mp3')
-sound_swing = pygame.mixer.Sound('data/knife_sfx.mp3')
-sound_heal = pygame.mixer.Sound('data/heal_sfx.wav')
-sound_pick = pygame.mixer.Sound('data/ammo_pick_sfx.mp3')
-sound_hurt = pygame.mixer.Sound('data/hurt_sfx.wav')
+snd_shoot = pygame.mixer.Sound('data/shoot_sfx.wav')
+snd_reload = pygame.mixer.Sound('data/reload_sfx.mp3')
+snd_swing = pygame.mixer.Sound('data/knife_sfx.mp3')
+snd_heal = pygame.mixer.Sound('data/heal_sfx.wav')
+snd_pick = pygame.mixer.Sound('data/ammo_pick_sfx.mp3')
+snd_hurt = pygame.mixer.Sound('data/hurt_sfx.wav')
+snd_en_shoot = pygame.mixer.Sound('data/enemy_shoot.mp3')
+snd_break_1 = pygame.mixer.Sound('data/snd_break1.wav')
+snd_break_2 = pygame.mixer.Sound('data/snd_break2.wav')
+pygame.mixer.music.load('data/mus_death.mp3')
 
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
@@ -101,9 +106,9 @@ def to_main_menu(from_menu):
 image = pygame_menu.BaseImage('data/bg2.png')
 theme = pygame_menu.Theme(background_color=image, widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=40,
                           title=False)
-mainTheme = pygame_menu.Theme(background_color=image, title_background_color=(4, 47, 126),
-                              widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=50)
-menu = pygame_menu.Menu('Snake Arena', width, height, theme=mainTheme)
+mainTheme = pygame_menu.Theme(background_color=image, widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=50,
+                              title=False)
+menu = pygame_menu.Menu('', width, height, theme=mainTheme)
 settings_menu = pygame_menu.Menu('', width, height, theme=theme)
 about_menu = pygame_menu.Menu('', width, height, theme=theme)
 level_sel_menu = pygame_menu.Menu('', width, height, theme=theme)
@@ -165,16 +170,18 @@ def mainloop():
                     else:
                         screen.blit(p_text[i], ((width - p_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
         else:
-            screen.blit(loose_screen, (0, 0))
+            game_over_screen()
+            break
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 print('You quited')
                 terminate()
             if player_is_dead and event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    pygame.mixer.music.stop()
                     menu.enable()
                     menu.mainloop(screen)
-                    return
+                    break
             if event.type == pygame.KEYDOWN and not player_is_dead and not is_win:
                 if event.key == pygame.K_ESCAPE:
                     game_is_running = not game_is_running
@@ -211,24 +218,24 @@ def mainloop():
                         pygame.time.set_timer(allow_reload, 3000)
                         if player.is_reloading:
                             player.is_reloading = False
-                            sound_reload.stop()
+                            snd_reload.stop()
                         else:
                             player.is_reloading = True
-                            sound_reload.play(0)
+                            snd_reload.play(0)
                     if event.key == pygame.K_UP or event.key == pygame.K_w:
                         moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
-                    if event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                    elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
                         moves['d'] = 1 if event.type == pygame.KEYDOWN else 0
-                    if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                    elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
                         moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
-                    if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                    elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
                         moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
             elif not player_is_dead:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_m:
+                        pygame.mixer.music.stop()
                         menu.enable()
                         menu.mainloop(screen)
-                        game_is_running = True
         clock.tick(fps)
         pygame.display.flip()
 
@@ -296,6 +303,8 @@ animated_images = {
         'up_enemy3': [pygame.image.load(f'data\_yellow_up_{i}.png') for i in range(1, 5)],
         'down_enemy3': [pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)]
 }
+heart_break = [load_image(f'heartbreak_{i}.png') for i in range(1, 3)]
+heart_pieces = [load_image(f'heart_piece_{i}.png') for i in range(1, 5)]
 knife_image = load_image('knife.png')
 box_image = load_image('ammo_drop.PNG')
 heart_image = load_image('heart.png')
@@ -309,6 +318,7 @@ class Bullet(pygame.sprite.Sprite):
         if not self.type:
             self.rect = pygame.draw.rect(screen, (255, 255, 0), (x, y, 8, 8))
         else:
+            snd_en_shoot.play()
             self.rect = pygame.draw.rect(screen, (225, 0, 0), (x, y, 12, 12))
         self.image = pygame.Surface((12, 12) if self.type else (8, 8))
         self.mov_vect = pygame.math.Vector2(vec_0 - x, vec_1 - y)
@@ -415,12 +425,12 @@ class Player(pygame.sprite.Sprite):
     def shoot(self):
         if self.is_shooting and self.ammo != 0:
             Bullet(*self.rect.center, *pygame.mouse.get_pos(), False)
-            sound_shoot.play(0)
+            snd_shoot.play(0)
             self.ammo -= 1
 
     def hit(self):
         if self.is_hitting:
-            sound_swing.play(0)
+            snd_swing.play(0)
             Knife(*pygame.mouse.get_pos())
 
     def reload(self):
@@ -432,9 +442,9 @@ class Player(pygame.sprite.Sprite):
         global game_is_running
         global player_is_dead
         if not self.safe_frames:
-            sound_hurt.play(0)
-            self.hp -= 1
-            if self.hp == 0:
+            snd_hurt.play(0)
+            self.hp -= 10
+            if self.hp <= 0:
                 print('You lost :(')
                 game_is_running = False
                 player_is_dead = True
@@ -469,11 +479,11 @@ class Drop(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, player_sprite):
             if player.pack < 5 and self.drop_type == 1:
                 player.pack += 1
-                sound_pick.play(0)
+                snd_pick.play(0)
                 self.kill()
             if player.hp != 10 and self.drop_type == 2:
                 player.hp += 1
-                sound_heal.play(0)
+                snd_heal.play(0)
                 self.kill()
 
 
@@ -655,6 +665,51 @@ class Enemy(pygame.sprite.Sprite):
             Bullet(*self.rect.center, *player.rect.center)
 
 
+def game_over_screen():
+    frames = 0
+    while frames < 3500:
+        frames += 1
+        screen.fill((0, 0, 0))
+        if frames < 1500:
+            screen.blit(heart_break[0], (player.rect.x + 10, player.rect.y + 10))
+        else:
+            screen.blit(heart_break[1], (player.rect.x + 5, player.rect.y + 10))
+        if frames == 1500: snd_break_1.play(0)
+        pygame.display.flip()
+    snd_break_2.play(0)
+    x_pos = [width // 2, width // 2, width // 2, width // 2]
+    y_pos = player.rect.y + 10
+    while frames < 6000:
+        screen.fill((0, 0, 0))
+        frames += 1
+        if frames % 4 == 0:
+            for piece, x_piece in enumerate(x_pos):
+                screen.blit(heart_pieces[piece], (x_piece, y_pos))
+                x_pos[piece] -= piece - (2 if piece < 2 else 1)
+            y_pos += 1
+        pygame.display.flip()
+    frames = 255
+    pygame.mixer.music.play(-1)
+    while True:
+        screen.blit(loose_screen, (0, 0))
+        if frames >= 0:
+            s = pygame.Surface((width, height))
+            s.set_alpha(int(frames))
+            s.fill((0, 0, 0))
+            screen.blit(s, (0, 0))
+            frames -= 0.1
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                terminate()
+            if ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_ESCAPE:
+                    pygame.mixer.music.stop()
+                    menu.enable()
+                    menu.mainloop(screen)
+                    break
+        pygame.display.flip()
+
+
 def load_level(filename):
     level = [string.strip() for string in open("data/" + filename, 'r')]
     max_width = max(map(len, level))
@@ -717,5 +772,13 @@ def text_display():
 
 level_map = load_level('level1.txt')
 player, level_x, level_y = generate_level(level_map)
+
+logo_image = pygame.image.load('data/logo.png')
+for a in range(101):
+    screen.fill((0, 0, 0))
+    logo_image.set_alpha(int(math.sin(3.14 * a / 100) * 255))
+    screen.blit(logo_image, (0, 0))
+    pygame.display.flip()
+    pygame.time.wait(40)
 
 menu.mainloop(screen)

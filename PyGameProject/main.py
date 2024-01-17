@@ -1,5 +1,5 @@
 import os
-import sys
+from sys import exit
 import pygame
 import pygame_menu
 import math
@@ -17,7 +17,6 @@ screen = pygame.display.set_mode(size)
 
 moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
 game_is_running, player_is_dead, spawned_enemies, sf = True, False, 0, 0
-tile_len, step = 50, 5
 level_selected, is_win = '', False
 pause_image = pygame.Surface([width, height], pygame.SRCALPHA)
 pygame.draw.rect(pause_image, (0, 0, 0, 100), (0, 0, width, height))
@@ -56,17 +55,20 @@ allow_hit = pygame.USEREVENT + 3
 pygame.time.set_timer(enemy_shoot, 500)
 
 
+def transition(surface, reverse=False):
+    for alpha in range(0, 256, 2):
+        screen.fill((0, 0, 0))
+        surface.set_alpha(alpha if not reverse else 255 - alpha)
+        screen.blit(surface, (0, 0))
+        pygame.time.wait(20)
+        pygame.display.flip()
+
+
 def start_the_game():
     global level_map, player, level_x, level_y, level_selected, game_is_running, player_is_dead, spawned_enemies, sf
-    black_surface = pygame.Surface((width, height), flags=pygame.SRCALPHA)
-    color = (0, 0, 0, 1)
-    black_surface.fill(color)
-    alpha_key = 1
-    while alpha_key <= 255:
-        screen.blit(black_surface, screen.get_rect())
-        pygame.display.flip()
-        alpha_key = alpha_key + 1
-        pygame.time.wait(3)
+    black_surface = pygame.Surface((width, height))
+    black_surface.fill((0, 0, 0))
+    transition(black_surface)
     level_sel_menu.disable()
     if level_selected:
         for i in all_sprites:
@@ -104,8 +106,8 @@ def to_main_menu(from_menu):
 
 
 image = pygame_menu.BaseImage('data/bg2.png')
-theme = pygame_menu.Theme(background_color=image, widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=40,
-                          title=False)
+theme = pygame_menu.Theme(background_color=(0, 0, 0), widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=40,
+                          title=False, widget_font_color=(200, 200, 200))
 mainTheme = pygame_menu.Theme(background_color=image, widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=50,
                               title=False)
 menu = pygame_menu.Menu('', width, height, theme=mainTheme)
@@ -170,27 +172,22 @@ def mainloop():
                     else:
                         screen.blit(p_text[i], ((width - p_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
         else:
+            snd_reload.stop()
             game_over_screen()
             break
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 print('You quited')
                 terminate()
-            if player_is_dead and event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    pygame.mixer.music.stop()
-                    menu.enable()
-                    menu.mainloop(screen)
-                    break
-            if event.type == pygame.KEYDOWN and not player_is_dead and not is_win:
+            if event.type == pygame.KEYDOWN and not is_win:
                 if event.key == pygame.K_ESCAPE:
                     game_is_running = not game_is_running
                     moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
-            if game_is_running and not player_is_dead:
-                if event.type == allow_shoot and player.weapon:
+            if game_is_running:
+                if event.type == allow_shoot and player.weapon and player.ammo and player.is_shooting:
                     pygame.time.set_timer(allow_shoot, 150)
                     player.shoot()
-                if event.type == allow_hit and not player.weapon:
+                elif event.type == allow_hit and not player.weapon and player.is_hitting:
                     pygame.time.set_timer(allow_hit, 500)
                     player.hit()
                 if event.type == enemy_shoot:
@@ -201,20 +198,18 @@ def mainloop():
                     player.is_reloading = False
                 if not player.is_reloading:
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                        player.is_shooting = True
-                        player.is_hitting = True
+                        player.is_shooting, player.is_hitting = True, True
                         pygame.time.set_timer(allow_shoot, 10)
                         pygame.time.set_timer(allow_hit, 10)
                     elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                        player.is_shooting = False
-                        player.is_hitting = False
-                if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
-                    if event.key == pygame.K_1 and event.type == pygame.KEYDOWN:
+                        player.is_shooting, player.is_hitting = False, False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_1:
                         player.weapon = 1
-                    elif event.key == pygame.K_2 and event.type == pygame.KEYDOWN:
+                    elif event.key == pygame.K_2:
                         player.weapon = 0
                         player.is_reloading = False
-                    if event.key == pygame.K_r and event.type == pygame.KEYDOWN and player.weapon:
+                    elif event.key == pygame.K_r and player.weapon:
                         pygame.time.set_timer(allow_reload, 3000)
                         if player.is_reloading:
                             player.is_reloading = False
@@ -222,6 +217,7 @@ def mainloop():
                         else:
                             player.is_reloading = True
                             snd_reload.play(0)
+                if event.type in (pygame.KEYDOWN, pygame.KEYUP):
                     if event.key == pygame.K_UP or event.key == pygame.K_w:
                         moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
                     elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
@@ -230,34 +226,26 @@ def mainloop():
                         moves['r'] = 1 if event.type == pygame.KEYDOWN else 0
                     elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
                         moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
-            elif not player_is_dead:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_m:
-                        pygame.mixer.music.stop()
-                        menu.enable()
-                        menu.mainloop(screen)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_m:
+                    pygame.mixer.music.stop()
+                    menu.enable()
+                    menu.mainloop(screen)
         clock.tick(fps)
         pygame.display.flip()
 
 
 def terminate():
     pygame.quit()
-    sys.exit()
+    exit()
 
 
-def load_image(name, colorkey=None):
+def load_image(name):
     fullname = os.path.join('data', name)
     if not os.path.isfile(fullname):
         print(f"Файл с изображением '{fullname}' не найден")
-        sys.exit()
-    im = pygame.image.load(fullname)
-    if colorkey is not None:
-        im = im.convert()
-        if colorkey == -1:
-            colorkey = im.get_at((0, 0))
-        im.set_colorkey(colorkey)
-    else:
-        im = im.convert_alpha()
+        exit()
+    im = pygame.image.load(fullname).convert_alpha()
     return im
 
 
@@ -322,8 +310,7 @@ class Bullet(pygame.sprite.Sprite):
             self.rect = pygame.draw.rect(screen, (225, 0, 0), (x, y, 12, 12))
         self.image = pygame.Surface((12, 12) if self.type else (8, 8))
         self.mov_vect = pygame.math.Vector2(vec_0 - x, vec_1 - y)
-        self.speed = 12 if not self.type else 7
-        self.mov_vect.scale_to_length(self.speed)
+        self.mov_vect.scale_to_length(12 if not self.type else 7)
 
     def update(self):
         if not self.type:
@@ -347,20 +334,19 @@ class Knife(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__(knife_sprite, all_sprites)
         self.ticks = 0
-        self.rect = player.rect
-        direction = (pygame.math.Vector2(x, y) - self.rect.center).angle_to((1, 0)) - 90
+        direction = (pygame.math.Vector2(x, y) - player.rect.center).angle_to((1, 0)) - 90
         self.x_move = -10 * math.sin(math.radians(direction))
         self.y_move = -10 * math.cos(math.radians(direction))
         self.image = pygame.transform.rotate(knife_image, direction)
-        self.rect = self.image.get_rect(center=self.rect.center)
+        self.rect = self.image.get_rect(center=player.rect.center)
 
     def update(self):
         self.rect.x += (self.x_move if self.ticks < 10 else -self.x_move) - camera.dx
         self.rect.y += (self.y_move if self.ticks < 10 else -self.y_move) - camera.dy
-        if pygame.sprite.spritecollideany(self, enemy_sprite) and self.ticks == 10:
+        if self.ticks == 10:
             for en in pygame.sprite.spritecollide(self, enemy_sprite, False):
                 en.health -= 1
-        if self.ticks == 20:
+        elif self.ticks == 20:
             self.kill()
         self.ticks += 1
 
@@ -372,9 +358,9 @@ class Player(pygame.sprite.Sprite):
         self.weapon, self.is_hitting, self.animation_count = 1, False, 0
         self.is_reloading, self.is_shooting, self.safe_frames, self.flag = False, False, False, False
         self.image = pygame.transform.scale(load_image('character.png'), (34, 52))
-        self.rect = self.image.get_rect(center=((tile_len * pos_x - self.image.get_width()) // 2,
-                                                (tile_len * pos_y - self.image.get_height()) // 2
-                                                )).move(tile_len * pos_x + 2, tile_len * pos_y - 3)
+        self.rect = self.image.get_rect(center=((50 * pos_x - self.image.get_width()) // 2,
+                                                (50 * pos_y - self.image.get_height()) // 2
+                                                )).move(50 * pos_x + 2, 50 * pos_y - 3)
 
     def move(self):
         if pygame.sprite.spritecollideany(self, border_sprite):
@@ -419,19 +405,17 @@ class Player(pygame.sprite.Sprite):
             self.animation_count = self.animation_count + 1 if self.animation_count < 15 else 0
         else:
             self.image = animated_images['player_stand'][self.weapon]
-        self.rect.x += step * (moves['r'] - moves['l'])
-        self.rect.y += step * (moves['d'] - moves['u'])
+        self.rect.x += 5 * (moves['r'] - moves['l'])
+        self.rect.y += 5 * (moves['d'] - moves['u'])
 
     def shoot(self):
-        if self.is_shooting and self.ammo != 0:
-            Bullet(*self.rect.center, *pygame.mouse.get_pos(), False)
-            snd_shoot.play(0)
-            self.ammo -= 1
+        Bullet(*self.rect.center, *pygame.mouse.get_pos(), False)
+        snd_shoot.play(0)
+        self.ammo -= 1
 
     def hit(self):
-        if self.is_hitting:
-            snd_swing.play(0)
-            Knife(*pygame.mouse.get_pos())
+        snd_swing.play(0)
+        Knife(*pygame.mouse.get_pos())
 
     def reload(self):
         if self.pack != 0:
@@ -439,14 +423,12 @@ class Player(pygame.sprite.Sprite):
             self.pack -= 1
 
     def damage(self):
-        global game_is_running
         global player_is_dead
         if not self.safe_frames:
             snd_hurt.play(0)
             self.hp -= 10
             if self.hp <= 0:
                 print('You lost :(')
-                game_is_running = False
                 player_is_dead = True
             self.safe_frames = True
 
@@ -462,7 +444,7 @@ class Tile(pygame.sprite.Sprite):
         else:
             super().__init__(tiles_sprite, all_sprites)
         self.image = tile_images[tile_type]
-        self.rect = self.image.get_rect().move(tile_len * pos_x, tile_len * pos_y)
+        self.rect = self.image.get_rect().move(50 * pos_x, 50 * pos_y)
 
 
 class Drop(pygame.sprite.Sprite):
@@ -512,7 +494,7 @@ class Spawner(pygame.sprite.Sprite):
         self.pos_x = pos_x
         self.pos_y = pos_y
         self.image = tile_images['spawner']
-        self.rect = self.image.get_rect().move(tile_len * pos_x, tile_len * pos_y)
+        self.rect = self.image.get_rect().move(50 * pos_x, 50 * pos_y)
 
     def update(self):
         global spawned_enemies
@@ -562,7 +544,7 @@ class Enemy(pygame.sprite.Sprite):
                                                    int((self.rect.width + 20) * (self.health / self.hp)), 10))
         if pygame.sprite.spritecollideany(self, border_sprite):
             sp = [self.rect.clip(i) for i in pygame.sprite.spritecollide(self, border_sprite, False)]
-            sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda a: (a[4], a[5]))
+            sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda z: (z[4], z[5]))
             if len(sp) != 1:
                 sp += [[min(sp[0][0], sp[1][0]), max(sp[0][1], sp[1][1]), max(sp[0][2], sp[1][2]), min(sp[0][3],
                                                                                                        sp[1][3])]]
@@ -774,11 +756,7 @@ level_map = load_level('level1.txt')
 player, level_x, level_y = generate_level(level_map)
 
 logo_image = pygame.image.load('data/logo.png')
-for a in range(101):
-    screen.fill((0, 0, 0))
-    logo_image.set_alpha(int(math.sin(3.14 * a / 100) * 255))
-    screen.blit(logo_image, (0, 0))
-    pygame.display.flip()
-    pygame.time.wait(40)
+transition(logo_image)
+transition(logo_image, True)
 
 menu.mainloop(screen)

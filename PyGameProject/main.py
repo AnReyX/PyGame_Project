@@ -16,24 +16,27 @@ fps = 60
 screen = pygame.display.set_mode(size)
 
 moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
+max_level = int(open('data/save.txt').readline())
 game_is_running, player_is_dead, spawned_enemies, sf = True, False, 0, 0
-level_selected, is_win = '', False
+level_selected, is_win, pause_time = '', False, 0
 pause_image = pygame.Surface([width, height], pygame.SRCALPHA)
 pygame.draw.rect(pause_image, (0, 0, 0, 100), (0, 0, width, height))
-p_text = [font.render(text, True, (255, 255, 255)) for text in ('Пауза!', 'Нажмите на M (ь), чтобы выйти.',
+p_text = [font.render(text, True, (255, 255, 255)) for text in ('Пауза!', 'Нажмите на M, чтобы выйти в меню.',
                                                                     'ВНИМАНИЕ! Ваш прогресс НЕ сохранится.')]
-w_text = [font.render(text, True, (255, 255, 255)) for text in ('Победа!', 'Нажмите на M (ь), чтобы выйти.')]
+w_text = [font.render(text, True, (255, 255, 255)) for text in ('Победа!', 'Нажмите на M, чтобы выйти в меню.',
+                                                                'Нажмите на N, чтобы перейти к следующему уровню')]
 
-snd_shoot = pygame.mixer.Sound('data/shoot_sfx.wav')
-snd_reload = pygame.mixer.Sound('data/reload_sfx.mp3')
-snd_swing = pygame.mixer.Sound('data/knife_sfx.mp3')
-snd_heal = pygame.mixer.Sound('data/heal_sfx.wav')
-snd_pick = pygame.mixer.Sound('data/ammo_pick_sfx.mp3')
-snd_hurt = pygame.mixer.Sound('data/hurt_sfx.wav')
-snd_en_shoot = pygame.mixer.Sound('data/enemy_shoot.mp3')
-snd_break_1 = pygame.mixer.Sound('data/snd_break1.wav')
-snd_break_2 = pygame.mixer.Sound('data/snd_break2.wav')
-pygame.mixer.music.load('data/mus_death.mp3')
+sounds = {
+    'shoot': pygame.mixer.Sound('data/shoot_sfx.wav'),
+    'reload': pygame.mixer.Sound('data/reload_sfx.mp3'),
+    'swing': pygame.mixer.Sound('data/knife_sfx.mp3'),
+    'heal': pygame.mixer.Sound('data/heal_sfx.wav'),
+    'pick': pygame.mixer.Sound('data/ammo_pick_sfx.mp3'),
+    'hurt': pygame.mixer.Sound('data/hurt_sfx.wav'),
+    'en_shoot': pygame.mixer.Sound('data/enemy_shoot.mp3'),
+    'break_1': pygame.mixer.Sound('data/snd_break1.wav'),
+    'break_2': pygame.mixer.Sound('data/snd_break2.wav')}
+music = ['mus_death', 'mus_pause', 'mus_menu', 'mus_fight']
 
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
@@ -51,33 +54,37 @@ allow_shoot = pygame.USEREVENT + 0
 allow_reload = pygame.USEREVENT + 1
 enemy_shoot = pygame.USEREVENT + 2
 allow_hit = pygame.USEREVENT + 3
+allow_spawn = pygame.USEREVENT + 4
 
 pygame.time.set_timer(enemy_shoot, 500)
 
 
 def transition(surface, reverse=False):
-    for alpha in range(0, 256, 2):
+    for alpha in range(0, 256, 10):
         screen.fill((0, 0, 0))
         surface.set_alpha(alpha if not reverse else 255 - alpha)
         screen.blit(surface, (0, 0))
-        pygame.time.wait(20)
+        pygame.time.wait(30)
         pygame.display.flip()
 
 
-def start_the_game():
-    global level_map, player, level_x, level_y, level_selected, game_is_running, player_is_dead, spawned_enemies, sf
+def start_the_game(level):
+    if int(level) > max_level: return
+    global is_win, game_is_running, player_is_dead, spawned_enemies, sf
+    global level_map, player, level_x, level_y, level_selected, boss
+    pygame.mixer.music.load(f'data/{music[3]}.mp3')
     black_surface = pygame.Surface((width, height))
     black_surface.fill((0, 0, 0))
     transition(black_surface)
+    pygame.time.wait(100)
     level_sel_menu.disable()
-    if level_selected:
-        for i in all_sprites:
-            i.kill()
-        game_is_running, player_is_dead, spawned_enemies, sf = True, False, 0, 0
-        level_map = load_level('level1.txt')
-        player, level_x, level_y = generate_level(level_map)
-    else:
-        level_selected = 'level1.txt'
+    for i in all_sprites:
+        i.kill()
+    is_win, game_is_running, player_is_dead, spawned_enemies, sf = False, True, False, 0, 0
+    level_selected = 'Уровень ' + level
+    level_map = load_level(f'level{level}.txt')
+    player, level_x, level_y, boss = generate_level(level_map)
+    pygame.mixer.music.play(-1)
     mainloop()
 
 
@@ -105,22 +112,46 @@ def to_main_menu(from_menu):
     menu.mainloop(screen)
 
 
+def change_volume(tip, value):
+    if not tip:
+        for i in sounds.values():
+            i.set_volume(int(value) / 100)
+    else:
+        pygame.mixer.music.set_volume(int(value) / 100)
+
+
 image = pygame_menu.BaseImage('data/bg2.png')
-theme = pygame_menu.Theme(background_color=(0, 0, 0), widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=40,
-                          title=False, widget_font_color=(200, 200, 200))
+aboutTheme = pygame_menu.Theme(background_color=(0, 0, 0), widget_font_size=25, title=False,
+                               widget_font_color=(215, 215, 215))
+theme = pygame_menu.Theme(background_color=(0, 0, 0), widget_font_size=40,
+                          title=False, widget_font_color=(215, 215, 215))
 mainTheme = pygame_menu.Theme(background_color=image, widget_font=pygame_menu.font.FONT_MUNRO, widget_font_size=50,
                               title=False)
 menu = pygame_menu.Menu('', width, height, theme=mainTheme)
 settings_menu = pygame_menu.Menu('', width, height, theme=theme)
-about_menu = pygame_menu.Menu('', width, height, theme=theme)
-level_sel_menu = pygame_menu.Menu('', width, height, theme=theme)
-level_sel_menu.add.label('You are in\n Level selection menu!')
-level_sel_menu.add.button('Play level 1 (DEMO)', start_the_game)
-level_sel_menu.add.button('Back', partial(to_main_menu, level_sel_menu))
-settings_menu.add.label('You are in\n Settings menu!')
-settings_menu.add.button('Back', partial(to_main_menu, settings_menu))
-about_menu.add.label('You are in\n About menu!')
-about_menu.add.button('Back', partial(to_main_menu, about_menu))
+about_menu = pygame_menu.Menu('', width, height, theme=aboutTheme)
+level_sel_menu = pygame_menu.Menu('', width, height, theme=theme, columns=3, rows=4)
+level_sel_menu.add.label('')
+for lvl in range(1, 4):
+    level_sel_menu.add.button(f'Уровень {lvl}', partial(start_the_game, str(lvl)))
+level_sel_menu.add.label('Выбор уровня')
+for lvl in range(4, 7):
+    level_sel_menu.add.button(f'Уровень {lvl}', partial(start_the_game, str(lvl)))
+level_sel_menu.add.button('Назад', partial(to_main_menu, level_sel_menu))
+for lvl in range(7, 9):
+    level_sel_menu.add.button(f'Уровень {lvl}', partial(start_the_game, str(lvl)))
+level_sel_menu.add.label('')
+settings_menu.add.label('Настройки')
+settings_menu.add.vertical_margin(50)
+settings_menu.add.range_slider('Громкость звуков:', 75, (0, 100), 1, onchange=partial(change_volume, False),
+                               value_format=lambda x: str(int(x)))
+settings_menu.add.vertical_margin(50)
+settings_menu.add.range_slider('Громкость музыки:', 75, (0, 100), 1, onchange=partial(change_volume, True),
+                               value_format=lambda x: str(int(x)))
+settings_menu.add.vertical_margin(200)
+settings_menu.add.button('Назад', partial(to_main_menu, settings_menu))
+about_menu.add.label(' '.join([i for i in open('about.txt', encoding='UTF-8')]))
+about_menu.add.button('Назад', partial(to_main_menu, about_menu))
 menu.add.button('Play', to_level_selection)
 menu.add.button('Settings', to_settings)
 menu.add.button('About', to_about)
@@ -128,7 +159,7 @@ menu.add.button('Quit', pygame_menu.events.EXIT)
 
 
 def mainloop():
-    global moves, game_is_running, sf, is_win
+    global moves, game_is_running, sf, is_win, pause_time, spawned_enemies
     while True:
         if not player_is_dead:
             screen.fill((0, 0, 0))
@@ -166,23 +197,39 @@ def mainloop():
                 player.move()
             else:
                 screen.blit(pause_image, (0, 0))
-                for i in range(2 if is_win else 3):
+                for i in range(3):
                     if is_win:
                         screen.blit(w_text[i], ((width - w_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
                     else:
                         screen.blit(p_text[i], ((width - p_text[i].get_width()) // 2, height // 2 - 75 + i * 50))
         else:
-            snd_reload.stop()
+            sounds['reload'].stop()
             game_over_screen()
             break
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 print('You quited')
                 terminate()
-            if event.type == pygame.KEYDOWN and not is_win:
+            elif event.type == pygame.KEYDOWN and not is_win:
                 if event.key == pygame.K_ESCAPE:
-                    game_is_running = not game_is_running
-                    moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
+                    if not game_is_running:
+                        game_is_running = True
+                        moves = {'u': 0, 'd': 0, 'l': 0, 'r': 0}
+                        pygame.mixer.music.load(f'data/{music[3]}.mp3')
+                        pygame.mixer.music.play(-1, pause_time / 1000, 50)
+                    else:
+                        game_is_running = False
+                        pause_time = pygame.mixer.music.get_pos()
+                        pygame.mixer.music.load(f'data/{music[1]}.mp3')
+                        pygame.mixer.music.play(-1, 0.0, 50)
+            elif event.type == allow_spawn:
+                spawned_enemies += 1
+                rand_enemy = rd.randint(1, 3)
+                if rand_enemy == 1:
+                    speed = 2
+                else:
+                    speed = 1 if rand_enemy == 2 else 5
+                Enemy(boss.rect.x + 40, boss.rect.y + 20, speed, rand_enemy)
             if game_is_running:
                 if event.type == allow_shoot and player.weapon and player.ammo and player.is_shooting:
                     pygame.time.set_timer(allow_shoot, 150)
@@ -213,10 +260,10 @@ def mainloop():
                         pygame.time.set_timer(allow_reload, 3000)
                         if player.is_reloading:
                             player.is_reloading = False
-                            snd_reload.stop()
+                            sounds['reload'].stop()
                         else:
                             player.is_reloading = True
-                            snd_reload.play(0)
+                            sounds['reload'].play(0)
                 if event.type in (pygame.KEYDOWN, pygame.KEYUP):
                     if event.key == pygame.K_UP or event.key == pygame.K_w:
                         moves['u'] = 1 if event.type == pygame.KEYDOWN else 0
@@ -227,10 +274,30 @@ def mainloop():
                     elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
                         moves['l'] = 1 if event.type == pygame.KEYDOWN else 0
             else:
+                global max_level
+                if is_win and pygame.mixer.get_busy():
+                    pygame.mixer.music.stop()
+                if is_win and max_level == 8:
+                    if event.type == pygame.KEYDOWN:
+                        if event.key in (pygame.K_n, pygame.K_m):
+                            pygame.mixer.music.stop()
+                            menu.enable()
+                            pygame.mixer.music.load(f'data/{music[2]}.mp3')
+                            pygame.mixer.music.play(-1)
+                            menu.mainloop(screen)
                 if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_n, pygame.K_m) and is_win:
+                        max_level += 1
+                        with open('data/save.txt', 'w') as f:
+                            f.write(str(max_level))
+                    if event.key == pygame.K_n and is_win:
+                        start_the_game(f'{int(level_selected[-1]) + 1}')
+                        return
                     if event.key == pygame.K_m:
                         pygame.mixer.music.stop()
                         menu.enable()
+                        pygame.mixer.music.load(f'data/{music[2]}.mp3')
+                        pygame.mixer.music.play(-1)
                         menu.mainloop(screen)
         clock.tick(fps)
         pygame.display.flip()
@@ -268,7 +335,9 @@ ui_images = {
     'heart': load_image('heart.png'),
     'empty_heart': load_image('empty_heart.png'),
     'bullet': load_image('bullet.png'),
-    'ammo_pack': load_image('ammo_pack.png')
+    'ammo_pack': load_image('ammo_pack.png'),
+    1: load_image('gun_icon.png'),
+    0: load_image('knife_icon.png')
 }
 animated_images = {
         'player_stand': [pygame.image.load(f'data\player_{j}stand.png') for j in ('k', '')],
@@ -290,7 +359,12 @@ animated_images = {
         'right_enemy3': [pygame.image.load(f'data\_yellow_right_{i}.png') for i in range(1, 5)],
         'left_enemy3': [pygame.image.load(f'data\_yellow_left_{i}.png') for i in range(1, 5)],
         'up_enemy3': [pygame.image.load(f'data\_yellow_up_{i}.png') for i in range(1, 5)],
-        'down_enemy3': [pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)]
+        'down_enemy3': [pygame.image.load(f'data\_yellow_down_{i}.png') for i in range(1, 5)],
+        'stand_enemy4': pygame.image.load('data\snake_king_down_1.png'),
+        'right_enemy4': [pygame.image.load(f'data\snake_king_right_{i}.png') for i in range(1, 5)],
+        'left_enemy4': [pygame.image.load(f'data\snake_king_left_{i}.png') for i in range(1, 5)],
+        'up_enemy4': [pygame.image.load(f'data\snake_king_up_{i}.png') for i in range(1, 5)],
+        'down_enemy4': [pygame.image.load(f'data\snake_king_down_{i}.png') for i in range(1, 5)],
 }
 heart_break = [load_image(f'heartbreak_{i}.png') for i in range(1, 3)]
 heart_pieces = [load_image(f'heart_piece_{i}.png') for i in range(1, 5)]
@@ -307,7 +381,7 @@ class Bullet(pygame.sprite.Sprite):
         if not self.type:
             self.rect = pygame.draw.rect(screen, (255, 255, 0), (x, y, 8, 8))
         else:
-            snd_en_shoot.play()
+            sounds['en_shoot'].play()
             self.rect = pygame.draw.rect(screen, (225, 0, 0), (x, y, 12, 12))
         self.image = pygame.Surface((12, 12) if self.type else (8, 8))
         self.mov_vect = pygame.math.Vector2(vec_0 - x, vec_1 - y)
@@ -355,10 +429,10 @@ class Knife(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(player_sprite, all_sprites)
-        self.hp, self.ammo, self.pack, self.killed_enemies = 10, 30, 5, 0
+        self.hp, self.ammo, self.pack, self.killed_enemies = 5, 30, 5, 0
         self.weapon, self.is_hitting, self.animation_count = 1, False, 0
         self.is_reloading, self.is_shooting, self.safe_frames, self.flag = False, False, False, False
-        self.image = pygame.transform.scale(load_image('character.png'), (34, 52))
+        self.image = load_image('player_stand.png')
         self.rect = self.image.get_rect(center=((50 * pos_x - self.image.get_width()) // 2,
                                                 (50 * pos_y - self.image.get_height()) // 2
                                                 )).move(50 * pos_x + 2, 50 * pos_y - 3)
@@ -411,11 +485,11 @@ class Player(pygame.sprite.Sprite):
 
     def shoot(self):
         Bullet(*self.rect.center, *pygame.mouse.get_pos(), False)
-        snd_shoot.play(0)
+        sounds['shoot'].play(0)
         self.ammo -= 1
 
     def hit(self):
-        snd_swing.play(0)
+        sounds['swing'].play(0)
         Knife(*pygame.mouse.get_pos())
 
     def reload(self):
@@ -426,10 +500,11 @@ class Player(pygame.sprite.Sprite):
     def damage(self):
         global player_is_dead
         if not self.safe_frames:
-            snd_hurt.play(0)
-            self.hp -= 10
+            sounds['hurt'].play(0)
+            self.hp -= 1
             if self.hp <= 0:
                 print('You lost :(')
+                pygame.mixer.music.stop()
                 player_is_dead = True
             self.safe_frames = True
 
@@ -462,11 +537,11 @@ class Drop(pygame.sprite.Sprite):
         if pygame.sprite.spritecollideany(self, player_sprite):
             if player.pack < 5 and self.drop_type == 1:
                 player.pack += 1
-                snd_pick.play(0)
+                sounds['pick'].play(0)
                 self.kill()
-            if player.hp != 10 and self.drop_type == 2:
+            if player.hp < 5 and self.drop_type == 2:
                 player.hp += 1
-                snd_heal.play(0)
+                sounds['heal'].play(0)
                 self.kill()
 
 
@@ -512,38 +587,51 @@ class Spawner(pygame.sprite.Sprite):
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x_enemy, y_enemy, speed, e_type):
+    def __init__(self, x_enemy, y_enemy, speed, e_type, movement='m'):
         super().__init__(all_sprites, enemy_sprite)
         self.e_type = e_type
         self.animation = [False, False, False, False, False]  # left, right, down, up, enemy_is_near
         self.animation_count = 0
         self.flag = False
+        self.movement = movement
         if e_type == 1:
             self.health = 7
         elif e_type == 2:
             self.health = 10
-        else:
+        elif e_type == 3:
             self.health = 3
+        else:
+            pygame.time.set_timer(allow_spawn, 5000)
+            self.health = 100
         self.hp = self.health
         self.is_hit = 0
         self.speed = speed
         self.image = animated_images[f'stand_enemy{e_type}']
         self.rect = self.image.get_rect().move(x_enemy, y_enemy)
+        if e_type == 4:
+            self.rect.width = 100
+            self.rect.height = 100
 
     def update(self):
         right, left, up, down = self.speed, -self.speed, -self.speed, self.speed
         if self.health <= 0:
-            player.killed_enemies += 1
-            if player.pack < 5 and rd.random() <= 0.2:
-                Drop(self.rect.left, self.rect.y, 1)
-            if player.hp != 10 and rd.random() <= 0.2:
-                Drop(self.rect.right, self.rect.y, 2)
+            if self.e_type == 4:
+                global is_win, game_is_running
+                is_win = True
+                game_is_running = False
+            else:
+                if level_selected != 'Уровень 8':
+                    player.killed_enemies += 1
+                if player.pack < 5 and rd.random() <= 0.2:
+                    Drop(self.rect.left, self.rect.y, 1)
+                if player.hp != 5 and rd.random() <= 0.35:
+                    Drop(self.rect.right, self.rect.y, 2)
             self.kill()
         elif self.health < self.hp:
             pygame.draw.rect(screen, (0, 0, 0), (self.rect.x - 10, self.rect.y - 15, self.rect.width + 20, 10))
             pygame.draw.rect(screen, (255, 0, 0), (self.rect.x - 10, self.rect.y - 15,
                                                    int((self.rect.width + 20) * (self.health / self.hp)), 10))
-        if pygame.sprite.spritecollideany(self, border_sprite):
+        if pygame.sprite.spritecollideany(self, border_sprite) and self.movement == 'm':
             sp = [self.rect.clip(i) for i in pygame.sprite.spritecollide(self, border_sprite, False)]
             sp = sorted([[i.left, i.right, i.bottom, i.top, i.width, i.height] for i in sp], key=lambda z: (z[4], z[5]))
             if len(sp) != 1:
@@ -561,11 +649,9 @@ class Enemy(pygame.sprite.Sprite):
                 if i[0] >= self.rect.right - (4 if self.e_type != 3 else 8):
                     right = 0
             self.flag = True
-        elif self.flag:
+        elif self.flag and self.movement == 'm':
             right, left, up, down = self.speed, -self.speed, -self.speed, self.speed
             self.flag = False
-        if pygame.sprite.spritecollideany(self, player_sprite):
-            player.damage()
         x, y = player.rect.x, player.rect.y
         if abs(self.rect.x - x) <= 200 and abs(self.rect.y - y) <= 200 and self.e_type != 2:
             if self.e_type == 1:
@@ -581,7 +667,7 @@ class Enemy(pygame.sprite.Sprite):
             self.animation = [False, False, False, False, True]
         elif self.e_type in (2, 3):
             self.animation[4] = False
-        if not self.animation[4]:
+        if not self.animation[4] and self.movement == 'm':
             # Если вражеский персонаж не находится на оптимальных для стрельбы координатах
             if self.rect.x != x or self.rect.y != y:
                 '''Условие, если координата x вражеского персонажа не равна координате x игрока 
@@ -628,20 +714,25 @@ class Enemy(pygame.sprite.Sprite):
                         self.animation = [True, False, False, False, self.animation[4]]
             else:
                 self.animation = [False, False, False, False, self.animation[4]]
-        if self.animation[0]:  # Анимация перемещения влево
-            self.image = animated_images[f'left_enemy{self.e_type}'][self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
-        elif self.animation[1]:  # Анимация перемещения вправо
-            self.image = animated_images[f'right_enemy{self.e_type}'][self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
-        elif self.animation[2]:  # Анимация перемещения вниз
-            self.image = animated_images[f'down_enemy{self.e_type}'][self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
-        elif self.animation[3]:  # Анимация перемещения вверх
-            self.image = animated_images[f'up_enemy{self.e_type}'][self.animation_count // 4]
-            self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
-        else:
-            self.image = animated_images[f'stand_enemy{self.e_type}']
+        if self.movement == 'm':
+            if self.animation[0]:  # Анимация перемещения влево
+                self.image = animated_images[f'left_enemy{self.e_type}'][self.animation_count // 4]
+                self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
+            elif self.animation[1]:  # Анимация перемещения вправо
+                self.image = animated_images[f'right_enemy{self.e_type}'][self.animation_count // 4]
+                self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
+            elif self.animation[2]:  # Анимация перемещения вниз
+                self.image = animated_images[f'down_enemy{self.e_type}'][self.animation_count // 4]
+                self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
+            elif self.animation[3]:  # Анимация перемещения вверх
+                self.image = animated_images[f'up_enemy{self.e_type}'][self.animation_count // 4]
+                self.animation_count = self.animation_count + 1 if self.animation_count != 15 else 0
+            else:
+                self.image = animated_images[f'stand_enemy{self.e_type}']
+            if self.e_type == 4:
+                self.image = pygame.transform.scale(self.image, (100, 100))
+        if pygame.sprite.spritecollideany(self, player_sprite):
+            player.damage()
 
     def shoot(self):
         if self.animation[4] and self.e_type == 1:
@@ -649,17 +740,19 @@ class Enemy(pygame.sprite.Sprite):
 
 
 def game_over_screen():
+    pygame.mixer.music.load(f'data/{music[0]}.mp3')
     frames = 0
+    x_pos, y_pos = player.rect.x, player.rect.y
     while frames < 3500:
         frames += 1
         screen.fill((0, 0, 0))
         if frames < 1500:
-            screen.blit(heart_break[0], (player.rect.x + 10, player.rect.y + 10))
+            screen.blit(heart_break[0], (x_pos + 10, y_pos + 10))
         else:
-            screen.blit(heart_break[1], (player.rect.x + 5, player.rect.y + 10))
-        if frames == 1500: snd_break_1.play(0)
+            screen.blit(heart_break[1], (x_pos + 5, y_pos + 10))
+        if frames == 1500: sounds['break_1'].play(0)
         pygame.display.flip()
-    snd_break_2.play(0)
+    sounds['break_2'].play(0)
     x_pos = [width // 2, width // 2, width // 2, width // 2]
     y_pos = player.rect.y + 10
     while frames < 6000:
@@ -673,8 +766,17 @@ def game_over_screen():
         pygame.display.flip()
     frames = 255
     pygame.mixer.music.play(-1)
+    loose_text = [font.render(text, True, (255, 255, 255)) for text in (level_selected,
+                                                                        f'Врагов убито: {player.killed_enemies}')]
+    btn_screen = pygame.Surface((150, 50))
+    btn_screen.fill((255, 255, 255))
+    btn_screen.blit(pygame.Surface((144, 44)), (3, 3))
+    btn_screen.blit(font.render('Назад', True, (255, 255, 255)), (40, 7))
     while True:
         screen.blit(loose_screen, (0, 0))
+        screen.blit(btn_screen, (500, 475))
+        for pos, i in enumerate(loose_text):
+            screen.blit(i, (500, 375 + (50 * pos)))
         if frames >= 0:
             s = pygame.Surface((width, height))
             s.set_alpha(int(frames))
@@ -684,10 +786,12 @@ def game_over_screen():
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 terminate()
-            if ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_ESCAPE:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                if 500 <= ev.pos[0] <= 650 and 475 <= ev.pos[1] <= 525:
                     pygame.mixer.music.stop()
                     menu.enable()
+                    pygame.mixer.music.load(f'data/{music[2]}.mp3')
+                    pygame.mixer.music.play(-1)
                     menu.mainloop(screen)
                     break
         pygame.display.flip()
@@ -695,11 +799,11 @@ def game_over_screen():
 
 def load_level(filename):
     level = [string.strip() for string in open("data/" + filename, 'r')]
-    max_width = max(map(len, level))
-    return list(map(lambda x: x.ljust(max_width, '.'), level))
+    return level
 
 
 def generate_level(level):
+    boss = None
     for y in range(len(level)):
         for x in range(len(level[y])):
             if level[y][x] == '.':
@@ -724,40 +828,51 @@ def generate_level(level):
             elif level[y][x] == 's':
                 Spawner(x, y, fps * 8)
                 Tile('empty', x, y)
-    return new_player, x, y
+            elif level[y][x] == 'E':
+                Enemy(x * 50, y * 50, 0, 1, 's')
+                Tile('empty', x, y)
+            elif level[y][x] == 'b':
+                boss = Enemy(x * 50, y * 50, 3, 4)
+                Tile('empty', x, y)
+    return new_player, x, y, boss
 
 
 def display_ui():
-    for i in range(10):
+    for i in range(5):
         if i < player.hp:
-            screen.blit(ui_images['heart'], (454 + i * 29, 10))
+            screen.blit(ui_images['heart'], (600 + i * 29, 10))
         else:
-            screen.blit(ui_images['empty_heart'], (454 + i * 29, 10))
+            screen.blit(ui_images['empty_heart'], (600 + i * 29, 10))
     screen.blit(ui_images['ammo_pack'], (width - 101, height - 77))
     screen.blit(ui_images['bullet'], (width - 195, height - 80))
+    screen.blit(ui_images[player.weapon], (width - 350, height - 85))
 
 
 def text_display():
     ev_disp = []
-    s1 = font.render('Уровень 1', True, pygame.Color('white'))
+    s1 = font.render(level_selected, True, pygame.Color('white'))
     r1 = s1.get_rect().move(10, 10)
-    s2 = font.render(f'Врагов: {player.killed_enemies} / 15', True, pygame.Color('white'))
-    r2 = s2.get_rect().move(10, height - s2.get_rect().height - 10)
-    s3 = font.render(f'x{player.ammo}', True, pygame.Color('white'))
-    r3 = s3.get_rect().move(width - 240, height - 50)
-    s4 = font.render(f'x{player.pack}', True, pygame.Color('white'))
-    r4 = s4.get_rect().move(width - 135, height - 50)
+    s2 = font.render(f'x{player.ammo}', True, pygame.Color('white'))
+    r2 = s2.get_rect().move(width - 240, height - 50)
+    s3 = font.render(f'x{player.pack}', True, pygame.Color('white'))
+    r3 = s3.get_rect().move(width - 135, height - 50)
+    if level_selected != 'Уровень 8':
+        s4 = font.render(f'Врагов: {player.killed_enemies} / 15', True, pygame.Color('white'))
+        ev_disp += [(s4, s4.get_rect().move(10, height - s2.get_rect().height - 10))]
     if player.is_reloading:
         s5 = font.render('Перезарядка!', True, pygame.Color('white'))
         ev_disp += [(s5, s5.get_rect().move(width - s5.get_rect().width - 10, 35))]
-    return [(s1, r1), (s2, r2), (s3, r3), (s4, r4)] + ev_disp
+    return [(s1, r1), (s2, r2), (s3, r3)] + ev_disp
 
 
 level_map = load_level('level1.txt')
-player, level_x, level_y = generate_level(level_map)
+player, level_x, level_y, boss = generate_level(level_map)
 
 logo_image = pygame.image.load('data/logo.png')
 transition(logo_image)
+pygame.time.wait(750)
 transition(logo_image, True)
 
+pygame.mixer.music.load(f'data/{music[2]}.mp3')
+pygame.mixer.music.play(-1)
 menu.mainloop(screen)

@@ -36,7 +36,7 @@ sounds = {
     'en_shoot': pygame.mixer.Sound('data/enemy_shoot.mp3'),
     'break_1': pygame.mixer.Sound('data/snd_break1.wav'),
     'break_2': pygame.mixer.Sound('data/snd_break2.wav')}
-music = ['mus_death', 'mus_pause', 'mus_menu', 'mus_fight']
+music = ['mus_death', 'mus_pause', 'mus_menu', 'mus_fight', 'mus_win']
 
 player_sprite = pygame.sprite.Group()
 tiles_sprite = pygame.sprite.Group()
@@ -77,7 +77,7 @@ def start_the_game(level):
     black_surface.fill((0, 0, 0))
     transition(black_surface)
     pygame.time.wait(100)
-    level_sel_menu.disable()
+    level_sel_menu.close()
     for i in all_sprites:
         i.kill()
     is_win, game_is_running, player_is_dead, spawned_enemies, sf = False, True, False, 0, 0
@@ -89,25 +89,25 @@ def start_the_game(level):
 
 
 def to_settings():
-    menu.disable()
-    settings_menu.enable()
+    menu.close()
+    settings_menu.close()
     settings_menu.mainloop(screen)
 
 
 def to_about():
-    menu.disable()
+    menu.close()
     about_menu.enable()
     about_menu.mainloop(screen)
 
 
 def to_level_selection():
-    menu.disable()
+    menu.close()
     level_sel_menu.enable()
     level_sel_menu.mainloop(screen)
 
 
 def to_main_menu(from_menu):
-    from_menu.disable()
+    from_menu.close()
     menu.enable()
     menu.mainloop(screen)
 
@@ -286,7 +286,7 @@ def mainloop():
                             pygame.mixer.music.play(-1)
                             menu.mainloop(screen)
                 if event.type == pygame.KEYDOWN:
-                    if event.key in (pygame.K_n, pygame.K_m) and is_win:
+                    if event.key in (pygame.K_n, pygame.K_m) and is_win and level_selected[-1] == str(max_level):
                         max_level += 1
                         with open('data/save.txt', 'w') as f:
                             f.write(str(max_level))
@@ -626,6 +626,9 @@ class Enemy(pygame.sprite.Sprite):
                     Drop(self.rect.left, self.rect.y, 1)
                 if player.hp != 5 and rd.random() <= 0.35:
                     Drop(self.rect.right, self.rect.y, 2)
+            if player.killed_enemies == 15:
+                pygame.mixer.music.load(f'data/{music[4]}.mp3')
+                pygame.mixer.music.play(-1)
             self.kill()
         elif self.health < self.hp:
             pygame.draw.rect(screen, (0, 0, 0), (self.rect.x - 10, self.rect.y - 15, self.rect.width + 20, 10))

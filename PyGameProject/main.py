@@ -229,7 +229,10 @@ def mainloop():
                     speed = 2
                 else:
                     speed = 1 if rand_enemy == 2 else 5
-                Enemy(boss.rect.x + 40, boss.rect.y + 20, speed, rand_enemy)
+                try:
+                    Enemy(boss.rect.x + 40, boss.rect.y + 20, speed, rand_enemy)
+                except AttributeError:
+                    ...
             if game_is_running:
                 if event.type == allow_shoot and player.weapon and player.ammo and player.is_shooting:
                     pygame.time.set_timer(allow_shoot, 150)
